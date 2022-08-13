@@ -5,7 +5,7 @@
         "DOSBox"
         {
             "install_path" "."
-            "display_name" "DOSBox Test!"
+            "display_name" "HazeCrate"
             "from_oslist" "windows"
             "to_oslist" "linux"
         }
