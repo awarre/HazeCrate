@@ -1,0 +1,58 @@
+#!/usr/bin/python3
+
+import sys, os, time
+args = sys.argv
+
+home = os.path.expanduser("~")
+
+STEAM_COMPAT_APP_ID = str(os.environ.get("STEAM_COMPAT_APP_ID")) 
+
+STEAM_COMPAT_INSTALL_PATH = (str(os.environ.get("STEAM_COMPAT_INSTALL_PATH"))[len(home):]).replace(' ','\ ')
+
+f = open('/home/deck/.steam/steam/compatibilitytools.d/dosbox/output.log', 'a')
+f.write('---------------------------\n')
+f.write("APP ID: " + STEAM_COMPAT_APP_ID + '\n')
+f.write("INSTALL PATH: " + STEAM_COMPAT_INSTALL_PATH + '\n')
+f.write('Args: ' + str(args) + '\n')
+
+executable = ''
+
+
+
+options = dict()
+for i in range(2, len(args)):
+    if args[i][-4:] == '.exe' or args[i][-4:] == '.bat':
+        executable = (args[i]).replace('\\','/')
+        f.write('Executable: ' + executable + '\n')
+    elif args[i][0] == '-':
+        #f.write('Option: ' + str(args[i] + '\n'))
+        if i + 1 < len(args):
+            if args[i + 1][0] != '-':
+                options[str(args[i])] = (str(args[i + 1])).replace('\\','/')
+                #print('Parameter: ' + str(args[i + 1]) + '\n')
+                #f.write('Parameter: ' + str(args[i + 1] + '\n'))
+            else:
+                options[str(args[i])] = ''
+                #print('Parameter: ' + 'null\n')
+                #f.write('Parameter: ' + 'null\n')
+
+for k,v in options.items():
+    f.write('Key: ' + k + ', Val: ' + v + '\n')
+
+executablePath = executable.replace(' ','\ ')
+f.write('exe Path: ' + executablePath + '\n')
+
+if '-conf' in options.keys():
+    configPath = (options['-conf']).replace(' ','\ ')
+    f.write('config Path: ' + configPath + '\n')
+
+
+
+cmd = "flatpak run --filesystem=~" + STEAM_COMPAT_INSTALL_PATH + " com.dosbox.DOSBox " + executablePath + '-conf ' + configPath + ' -fullscreen -exit'
+f.write(cmd + '\n')
+# cmd = "flatpak run --filesystem=" + STEAM_COMPAT_INSTALL_PATH + "/ --command=" + executablePath + '-conf ' + configPath + " com.dosbox.DOSBox"
+
+
+
+f.close()
+os.system(cmd)
