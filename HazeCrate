@@ -1,0 +1,134 @@
+#!/usr/bin/python3
+
+import sys, os, configparser, shlex
+args = sys.argv
+
+DEBUG = True
+HOME = os.path.expanduser("~")
+STEAM_COMPAT_APP_ID = str(os.environ.get("STEAM_COMPAT_APP_ID")) 
+STEAM_COMPAT_INSTALL_PATH = str(os.environ.get("STEAM_COMPAT_INSTALL_PATH"))
+
+DOSBOX = 'com.dosbox.DOSBox'
+#DOSBOX = 'com.dosbox_x.DOSBox-X'
+
+defaultConfig = """
+[sdl]
+fullscreen = true
+fulldouble = true
+fullresolution = desktop
+output= opengl
+
+[render]
+aspect = true
+
+[mixer]
+rate = 44100
+blocksize = 4096
+prebuffer = 30
+"""
+
+debugLog = '/home/deck/.steam/steam/compatibilitytools.d/HazeCrate/debug_' + STEAM_COMPAT_APP_ID + '.log'
+config = configparser.ConfigParser()
+
+autoConfigPath = STEAM_COMPAT_INSTALL_PATH + '/DOSBOX_HAZECRATE_AUTO_' + STEAM_COMPAT_APP_ID + '.conf'
+
+if os.path.exists(autoConfigPath):
+    os.remove(autoConfigPath)
+
+if os.path.exists(debugLog):
+    os.remove(debugLog)
+
+def writeDebug(l):
+    if(DEBUG):
+        with open(debugLog, 'a') as f:
+            f.write(l + '\n')
+
+def saveConfig(conf):
+    try:
+        with open(autoConfigPath, 'a') as f:
+            f.write(conf + '\n')
+    except:
+        writeDebug("Can't save config: " + autoConfigPath)
+
+writeDebug('---------------------------')
+writeDebug('APP ID: ' + STEAM_COMPAT_APP_ID )
+writeDebug('INSTALL PATH: ' + STEAM_COMPAT_INSTALL_PATH)
+writeDebug('Args: ' + str(args))
+
+options = dict()
+executable = ''
+for i in range(2, len(args)):
+    if args[i][-4:] == '.exe' or args[i][-4:] == '.bat':
+        executable = (args[i]).replace('\\','/')
+        writeDebug('Executable: ' + executable)
+    elif args[i][0] == '-':
+        if i + 1 < len(args):
+            if args[i + 1][0] != '-':
+                options[str(args[i])] = (str(args[i + 1])).replace('\\','/')
+            else:
+                options[str(args[i])] = ''
+
+for k,v in options.items():
+    writeDebug('Key: ' + k + ', Val: ' + v)
+
+if executable == '':
+    executablePath = ''
+else:
+    executablePath = shlex.quote(executable) + ' '
+
+writeDebug('exe Path: ' + executablePath)
+
+if '-conf' in options.keys():
+    configPath = shlex.quote(options['-conf'])
+    writeDebug('config Path: ' + configPath)
+elif os.path.exists(os.getcwd() + '/dosbox.conf'):
+    configPath = shlex.quote('dosbox.conf')
+    writeDebug('config Path: ' + configPath)
+
+confFullPath = os.path.join(os.getcwd(), configPath)
+writeDebug('Conf full path: ' + confFullPath)
+
+try:
+    configFile = open(confFullPath, 'r')
+    configData = configFile.read()
+except:
+    writeDebug("Couldn't open config")
+
+configAutoexec = []
+confArray = configData.splitlines()
+for line in confArray:
+    if((line).lower() == '[autoexec]' or configAutoexec and line):
+        if(line[0] == '[' and (line).lower() != '[autoexec]'):
+            writeDebug("End autoexec")
+            break
+        configAutoexec.append(line)
+
+writeDebug("Autoconfig Path: " + autoConfigPath)
+
+# Parse the config file
+try:
+    config.read(confFullPath)
+except:
+    writeDebug("Couldn't parse config")
+
+### Apply default config settings ###
+config.read_string(defaultConfig)
+
+# Delete the [autoexec] section. We handle it separately
+config.remove_section('autoexec')
+
+# Save modified config
+for section in config.sections():
+    saveConfig('[' + section + ']')
+    for (key, val) in config.items(section):
+        saveConfig(key + '=' + val)
+
+# Save [autoexec] section
+for line in configAutoexec:
+    saveConfig(line)
+
+cmd = "flatpak run --filesystem=~" + shlex.quote(STEAM_COMPAT_INSTALL_PATH[len(HOME):]) + ' ' + DOSBOX + ' ' + executablePath + '-conf ' + shlex.quote(autoConfigPath) + ' -exit'
+writeDebug('CMD: ' + cmd)
+
+configFile.close()
+os.system(cmd)
