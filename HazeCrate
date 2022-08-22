@@ -2,6 +2,8 @@
 
 ### REFERENCES ###
 # https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/blob/master/docs/steam-compat-tool-interface.md
+# https://www.dosbox.com/wiki/Dosbox.conf
+# https://www.dosbox.com/DOSBoxManual.html
 import sys, os, configparser, shlex
 args = sys.argv
 
@@ -13,7 +15,8 @@ STEAM_COMPAT_INSTALL_PATH = str(os.environ.get("STEAM_COMPAT_INSTALL_PATH"))
 DOSBOX = 'com.dosbox.DOSBox'
 #DOSBOX = 'com.dosbox_x.DOSBox-X'
 
-defaultConfig = """
+# DOSBOX configuration template to override for settings better for Steam Deck
+templateDosboxConf = """
 [sdl]
 fullscreen=true
 fulldouble=true
@@ -27,7 +30,7 @@ blocksize=4096
 prebuffer=30
 """
 
-debugLog = '/home/deck/.steam/steam/compatibilitytools.d/HazeCrate/debug_' + STEAM_COMPAT_APP_ID + '.log'
+debugLog = '/home/deck/.steam/steam/compatibilitytools.d/HazeCrate/debug/debug_' + STEAM_COMPAT_APP_ID + '.log'
 config = configparser.ConfigParser()
 
 autoConfigPath = STEAM_COMPAT_INSTALL_PATH + '/HazeCrate_AUTO_' + STEAM_COMPAT_APP_ID + '.conf'
@@ -47,19 +50,35 @@ def saveConfig(conf):
     try:
         with open(autoConfigPath, 'a') as f:
             f.write(conf + '\n')
-    except:
-        writeDebug("Can't save config: " + autoConfigPath)
-
+    except Exception as e:
+        writeDebug("Can't save config: " + autoConfigPath + "Exception: " + str(e))
 
 def file_exists_ci(file):
+    # If the file doesn't exist in the case specified, loop through every file in the specified directory
     if not os.path.exists(file):
-        dir = os.path.dirname(file)
+        if '/' in file:
+            dir = os.path.dirname(file)
+        else:
+            dir = './'
         for f in os.listdir(dir):
+            writeDebug("File: " + f)
+            # What if the current file and the file we are looking for were both lower case, would they match then?
             if str(f).lower() == str(os.path.basename(file)).lower():
                 return str(os.path.join(dir, f))
+
+        # No config found? Return false?
+        return ''
     else:
+        # Yeah that file is right here dude
         return str(file)
 
+def getDOSBoxConfPath(path):
+    dosboxConfPath = file_exists_ci(STEAM_COMPAT_INSTALL_PATH + path)
+    if not dosboxConfPath:
+        dosboxConfPath = ''
+    
+    #configPath = shlex.quote(dosboxConfPath)
+    return dosboxConfPath
 
 writeDebug('APP ID: ' + STEAM_COMPAT_APP_ID)
 writeDebug('INSTALL PATH: ' + STEAM_COMPAT_INSTALL_PATH)
@@ -82,29 +101,31 @@ for i in range(2, len(args)):
 for k,v in options.items():
     writeDebug('Key: ' + k + ', Val: ' + v)
 
+# Did we find an executable? That'd be nice.
 if executable == '':
+    # I guess we didn't!
     executablePath = ''
 else:
     executablePath = shlex.quote(executable) + ' '
 
 writeDebug('exe Path: ' + executablePath)
 
+# Let's find the dosbox config file!
 if '-conf' in options.keys():
-    configPath = shlex.quote(options['-conf'])
-    writeDebug('config Path: ' + configPath)
-elif os.path.exists(os.getcwd() + '/dosbox.conf'):
-    configPath = shlex.quote('dosbox.conf')
-    writeDebug('config Path: ' + configPath)
-
-confFullPath = os.path.join(os.getcwd(), configPath)
-writeDebug('Conf full path: ' + confFullPath)
+    writeDebug('DOSBox config parameter specified.')
+    configPath = getDOSBoxConfPath(options['-conf'])
+else:
+    writeDebug('Default DOSBox config found.')
+    configPath = getDOSBoxConfPath('/dosbox.conf')
+   
+writeDebug('DOSBox config Path: ' + configPath)
 
 try:
-    configFile = open(confFullPath, 'r')
+    configFile = open(configPath, 'r')
     configData = configFile.read()
     configFile.close()
-except:
-    writeDebug("Couldn't open config")
+except Exception as e:
+    writeDebug("Couldn't open config. Exception: " + str(e))
 
 configAutoexec = []
 confArray = configData.splitlines()
@@ -119,12 +140,13 @@ writeDebug("Autoconfig Path: " + autoConfigPath)
 
 # Parse the config file
 try:
-    config.read(confFullPath)
-except:
-    writeDebug("Couldn't parse config")
+    config.read(configPath)
+# Usually exceptions are [autoexec] errors since configParser doesn't like the format.
+except Exception as e:
+    writeDebug("Couldn't parse config. Exception: " + str(e))
 
-### Apply default config settings ###
-config.read_string(defaultConfig)
+### Apply Steam Deck config template ###
+config.read_string(templateDosboxConf)
 
 # Delete the [autoexec] section. We handle it separately
 config.remove_section('autoexec')
@@ -137,9 +159,11 @@ for section in config.sections():
 
 # Save [autoexec] section
 for line in configAutoexec:
+    # Replace all the backslashes from DOS paths with forward slashes. This will fix most autoexec mounts and executable paths. Probably should be smarter.
+    line = line.replace('\\','/')
     saveConfig(line)
 
-cmd = "flatpak run --filesystem=~" + shlex.quote(STEAM_COMPAT_INSTALL_PATH[len(HOME):]) + ' ' + DOSBOX + ' ' + executablePath + '-conf ' + shlex.quote(autoConfigPath) + ' -exit'
+cmd = "flatpak run --filesystem=" + shlex.quote('~' + STEAM_COMPAT_INSTALL_PATH[len(HOME):]) + ' ' + DOSBOX + ' ' + executablePath + '-conf ' + shlex.quote(autoConfigPath) + ' -exit'
 writeDebug('CMD: ' + cmd)
 
 os.system(cmd)
