@@ -6,7 +6,7 @@
 # https://www.dosbox.com/DOSBoxManual.html
 # https://www.dosbox.com/wiki/MOUNT
 # https://www.doomworld.com/forum/topic/127408-setting-up-dosbox-properly/
-import sys, os, configparser, shlex
+import sys, os, configparser, shlex, argparse
 from pathlib import Path
 args = sys.argv
 
@@ -67,6 +67,7 @@ tandy=auto
 tandyrate=44100
 disney=true
 """
+
 
 debugLog = '/home/deck/.steam/steam/compatibilitytools.d/HazeCrate/debug/debug_' + STEAM_COMPAT_APP_ID + '.log'
 config = configparser.ConfigParser()
@@ -179,6 +180,38 @@ def mountParser(line):
 writeDebug('APP ID: ' + STEAM_COMPAT_APP_ID)
 writeDebug('INSTALL PATH: ' + STEAM_COMPAT_INSTALL_PATH)
 writeDebug('Args: ' + str(args))
+
+try:
+    argParser = argparse.ArgumentParser()
+    argParser.add_argument('steampath', nargs='?', default='')
+    argParser.add_argument('name', nargs='?', default='')
+    argParser.add_argument('command', nargs='?', default='')
+    argParser.add_argument('-conf', help='DOSBox configuration file.')
+    argParser.add_argument('-exit', action='store_true')
+    argParser.add_argument('-c')
+    argParser.add_argument('-fullscreen', action='store_true')
+    argParser.add_argument('-lang')
+    argParser.add_argument('-machine')
+    argParser.add_argument('-noconsole', action='store_true')
+    argParser.add_argument('-startmapper', action='store_true')
+    argParser.add_argument('-noautoexec', action='store_true')
+    argParser.add_argument('-securemode', action='store_true')
+    argParser.add_argument('-scaler')
+    argParser.add_argument('-forcescaler')
+    argParser.add_argument('-version', action='store_true')
+    argParser.add_argument('-socket')
+    argParser.add_argument('-editconf')
+    argParser.add_argument('-opencaptures')
+    argParser.add_argument('-printconf', action='store_true')
+    argParser.add_argument('-eraseconf', action='store_true')
+    argParser.add_argument('-erasemapper')
+    results = argParser.parse_args(sys.argv)
+except:
+    writeDebug('Error: ' + str(argParser.error()))
+
+writeDebug ("Arguments")
+for k in results.__dict__:
+    writeDebug(str(k) + ', ' + str(results.__dict__[k]))
 
 options = dict()
 executable = ''
