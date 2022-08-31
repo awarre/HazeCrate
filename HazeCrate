@@ -16,7 +16,8 @@ STEAM_COMPAT_APP_ID = str(os.environ.get("STEAM_COMPAT_APP_ID"))
 STEAM_COMPAT_INSTALL_PATH = str(os.environ.get("STEAM_COMPAT_INSTALL_PATH"))
 
 #DOSBOX = 'com.dosbox.DOSBox'
-DOSBOX = 'com.dosbox_x.DOSBox-X'
+#DOSBOX = 'com.dosbox_x.DOSBox-X'
+DOSBOX = 'io.github.dosbox-staging'
 
 # DOSBOX configuration template to override for settings better for Steam Deck
 templateDosboxConf = """
