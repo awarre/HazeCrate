@@ -1,6 +1,13 @@
 #!/usr/bin/python3
 
+### REFERENCES ###
+# https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/blob/master/docs/steam-compat-tool-interface.md
+# https://www.dosbox.com/wiki/Dosbox.conf
+# https://www.dosbox.com/DOSBoxManual.html
+# https://www.dosbox.com/wiki/MOUNT
+# https://www.doomworld.com/forum/topic/127408-setting-up-dosbox-properly/
 import sys, os, configparser, shlex
+from pathlib import Path
 args = sys.argv
 
 DEBUG = True
@@ -8,29 +15,63 @@ HOME = os.path.expanduser("~")
 STEAM_COMPAT_APP_ID = str(os.environ.get("STEAM_COMPAT_APP_ID")) 
 STEAM_COMPAT_INSTALL_PATH = str(os.environ.get("STEAM_COMPAT_INSTALL_PATH"))
 
-DOSBOX = 'com.dosbox.DOSBox'
+#DOSBOX = 'com.dosbox.DOSBox'
 #DOSBOX = 'com.dosbox_x.DOSBox-X'
+DOSBOX = 'io.github.dosbox-staging'
 
-defaultConfig = """
+# DOSBOX configuration template to override for settings better for Steam Deck
+templateDosboxConf = """
 [sdl]
-fullscreen = true
-fulldouble = true
-fullresolution = desktop
-output= opengl
-
+fullscreen=true
+fulldouble=false
+fullresolution=desktop
+output=opengl
+waitonerror=true
+[dosbox]
+memsize=32
+machine=svga_s3
+[cpu]
+core=auto
+cputype=auto
 [render]
-aspect = true
-
+aspect=true
+scaler=hq3x
 [mixer]
-rate = 44100
-blocksize = 4096
-prebuffer = 30
+rate=44100
+blocksize=1024
+prebuffer=20
+[midi]
+mpu401=intelligent
+mididevice=default
+[sblaster]
+sbtype=sb16
+sbbase=220
+irq=5
+dma=1
+hdma=5
+sbmixer=true
+oplmode=opl3
+oplemu=compat
+oplrate=44100
+[gus]
+gus=true
+gusrate=44100
+gusbase=240
+gusirq=7
+gusdma=3
+ultradir=C:\\ULTRASND
+[speaker]
+pcspeaker=true
+pcrate=44100
+tandy=auto
+tandyrate=44100
+disney=true
 """
 
-debugLog = '/home/deck/.steam/steam/compatibilitytools.d/HazeCrate/debug_' + STEAM_COMPAT_APP_ID + '.log'
+debugLog = '/home/deck/.steam/steam/compatibilitytools.d/HazeCrate/debug/debug_' + STEAM_COMPAT_APP_ID + '.log'
 config = configparser.ConfigParser()
 
-autoConfigPath = STEAM_COMPAT_INSTALL_PATH + '/DOSBOX_HAZECRATE_AUTO_' + STEAM_COMPAT_APP_ID + '.conf'
+autoConfigPath = STEAM_COMPAT_INSTALL_PATH + '/HazeCrate_AUTO_' + STEAM_COMPAT_APP_ID + '.conf'
 
 if os.path.exists(autoConfigPath):
     os.remove(autoConfigPath)
@@ -47,11 +88,95 @@ def saveConfig(conf):
     try:
         with open(autoConfigPath, 'a') as f:
             f.write(conf + '\n')
-    except:
-        writeDebug("Can't save config: " + autoConfigPath)
+    except Exception as e:
+        writeDebug("Can't save config: " + autoConfigPath + "Exception: " + str(e))
 
-writeDebug('---------------------------')
-writeDebug('APP ID: ' + STEAM_COMPAT_APP_ID )
+def file_exists_ci(file):
+    # If the file doesn't exist in the case specified, loop through every file in the specified directory
+    if not os.path.exists(file):
+        if '/' in file:
+            dir = os.path.dirname(file)
+        else:
+            dir = './'
+        for f in os.listdir(dir):
+            #writeDebug("File: " + f)
+            # What if the current file and the file we are looking for were both lower case, would they match then?
+            if str(f).lower() == str(os.path.basename(file)).lower():
+                return str(os.path.join(dir, f))
+        # No config found? Return false?
+        return ''
+    else:
+        # Yeah that file is right here dude
+        return str(file)
+
+def getDOSBoxConfPath(path):
+    if not STEAM_COMPAT_INSTALL_PATH in path:
+        path = STEAM_COMPAT_INSTALL_PATH + '/' + path
+    dosboxConfPath = file_exists_ci(path)
+    return dosboxConfPath
+
+def getSectionAutoexec(conf):
+    autoexecConf = []
+    confArray = conf.splitlines()
+
+    # Find the [autoexec] section
+    for line in confArray:
+        # If the current line is the [autoexec] header, if we've already found it, and that the line isn't empty
+        if(line.lower() == '[autoexec]' or autoexecConf) and line:
+            # Stop if we find another section header
+            if(line[0] == '[' and line.lower() != '[autoexec]'):
+                writeDebug("End autoexec")
+                break
+            autoexecConf.append(line)
+
+    # The [autoexec] sections can be an absolute mess, let's try to clean it up.
+    for i in range(len(autoexecConf)):
+        line = autoexecConf[i]
+        # Fix the paths for a Linux environment
+        autoexecConf[i] = autoexecConf[i].replace('\\','/')
+
+        # Try to fix the case senstitivity in mount lines...
+        if 'mount' in autoexecConf[i].lower():
+            writeDebug('Found mount line: ' + autoexecConf[i])
+            autoexecConf[i] = mountParser(autoexecConf[i])
+        #writeDebug('autoexec line: ' + autoexecConf[i])
+
+    return autoexecConf
+
+def mountParser(line):
+    mountArgs = shlex.split(line)
+    driveLetter = mountArgs[1]
+    localDir = mountArgs[2]
+    localDir = localDir.replace('"', '')
+    localDirPathArray = localDir.split('/')
+    localDirPath = os.getcwd()
+    for d in localDirPathArray:
+        path = str(localDirPath + '/' + d)
+        searchPath = Path(path)
+        localDirPath = file_exists_ci(str(searchPath.resolve()))
+
+    path = Path(localDirPath)
+    writeDebug("LocalDirPath: " + localDirPath)
+    writeDebug("LocalDirPath, Resolved: " + str(path.resolve()))
+
+    # Shorten to 
+    if str(HOME + '/') in localDirPath:
+        localDirPath = "~/" + localDirPath[len(HOME) + 1:]
+
+    writeDebug("LocalDirPath, Final: " + localDirPath)
+    mountArgs[2] = localDirPath
+
+    if localDirPath == '':
+        mountArgs[2] = './'
+        writeDebug('No local dir path: ./')
+
+    mountArgs[2] = '"' + mountArgs[2] + '"'
+
+    line = ' '.join(mountArgs)
+    writeDebug("Mount line (fixed): " + line)
+    return line
+
+writeDebug('APP ID: ' + STEAM_COMPAT_APP_ID)
 writeDebug('INSTALL PATH: ' + STEAM_COMPAT_INSTALL_PATH)
 writeDebug('Args: ' + str(args))
 
@@ -60,6 +185,7 @@ executable = ''
 for i in range(2, len(args)):
     if args[i][-4:] == '.exe' or args[i][-4:] == '.bat':
         executable = (args[i]).replace('\\','/')
+        executable = file_exists_ci(executable)
         writeDebug('Executable: ' + executable)
     elif args[i][0] == '-':
         if i + 1 < len(args):
@@ -71,48 +197,48 @@ for i in range(2, len(args)):
 for k,v in options.items():
     writeDebug('Key: ' + k + ', Val: ' + v)
 
+# Did we find an executable? That'd be nice.
 if executable == '':
+    # I guess we didn't!
     executablePath = ''
 else:
     executablePath = shlex.quote(executable) + ' '
 
 writeDebug('exe Path: ' + executablePath)
 
+# Let's find the dosbox config file!
 if '-conf' in options.keys():
-    configPath = shlex.quote(options['-conf'])
-    writeDebug('config Path: ' + configPath)
-elif os.path.exists(os.getcwd() + '/dosbox.conf'):
-    configPath = shlex.quote('dosbox.conf')
-    writeDebug('config Path: ' + configPath)
+    writeDebug('DOSBox config parameter specified.')
+    configPath = getDOSBoxConfPath(os.getcwd() + '/' + options['-conf'])
+else:
+    configPath = getDOSBoxConfPath('/dosbox.conf')
+    if configPath:
+        writeDebug('Default DOSBox config found.')
+    else:
+        writeDebug('No config found. Is this even a DOSBox game?')
 
-confFullPath = os.path.join(os.getcwd(), configPath)
-writeDebug('Conf full path: ' + confFullPath)
+writeDebug('DOSBox config Path: ' + configPath)
 
 try:
-    configFile = open(confFullPath, 'r')
+    configFile = open(configPath, 'r')
     configData = configFile.read()
-except:
-    writeDebug("Couldn't open config")
+    configFile.close()
+except Exception as e:
+    writeDebug("Couldn't open config. Exception: " + str(e))
 
-configAutoexec = []
-confArray = configData.splitlines()
-for line in confArray:
-    if((line).lower() == '[autoexec]' or configAutoexec and line):
-        if(line[0] == '[' and (line).lower() != '[autoexec]'):
-            writeDebug("End autoexec")
-            break
-        configAutoexec.append(line)
+configAutoexec = getSectionAutoexec(configData)
 
 writeDebug("Autoconfig Path: " + autoConfigPath)
 
 # Parse the config file
 try:
-    config.read(confFullPath)
-except:
-    writeDebug("Couldn't parse config")
+    config.read(configPath)
+# Usually exceptions are [autoexec] errors since configParser doesn't like the format.
+except Exception as e:
+    writeDebug("Couldn't parse config. Exception: " + str(e))
 
-### Apply default config settings ###
-config.read_string(defaultConfig)
+### Apply Steam Deck config template ###
+config.read_string(templateDosboxConf)
 
 # Delete the [autoexec] section. We handle it separately
 config.remove_section('autoexec')
@@ -125,10 +251,10 @@ for section in config.sections():
 
 # Save [autoexec] section
 for line in configAutoexec:
+    writeDebug('written autoexec: ' + line)
     saveConfig(line)
 
-cmd = "flatpak run --filesystem=~" + shlex.quote(STEAM_COMPAT_INSTALL_PATH[len(HOME):]) + ' ' + DOSBOX + ' ' + executablePath + '-conf ' + shlex.quote(autoConfigPath) + ' -exit'
+cmd = "flatpak run --filesystem=" + shlex.quote('~' + STEAM_COMPAT_INSTALL_PATH[len(HOME):]) + ' ' + DOSBOX + ' ' + executablePath + '-conf ' + shlex.quote(autoConfigPath) + ' -exit'
 writeDebug('CMD: ' + cmd)
 
-configFile.close()
 os.system(cmd)
