@@ -20,9 +20,6 @@ DEBUG = True
 HOME = os.path.expanduser("~")
 STEAM_COMPAT_APP_ID = str(os.environ.get("STEAM_COMPAT_APP_ID")) 
 STEAM_COMPAT_INSTALL_PATH = str(os.environ.get("STEAM_COMPAT_INSTALL_PATH"))
-
-#DOSBOX = 'com.dosbox.DOSBox'
-#DOSBOX = 'com.dosbox_x.DOSBox-X'
 DOSBOX = 'io.github.dosbox-staging'
 
 # DOSBOX configuration template to override for settings better for Steam Deck
@@ -75,8 +72,6 @@ disney=true
 """
 
 debugLog = '/home/deck/.steam/steam/compatibilitytools.d/HazeCrate/debug/debug_' + STEAM_COMPAT_APP_ID + '.log'
-config = configparser.ConfigParser()
-
 autoConfigPath = STEAM_COMPAT_INSTALL_PATH + '/HazeCrate_AUTO_' + STEAM_COMPAT_APP_ID + '.conf'
 
 if os.path.exists(autoConfigPath):
@@ -123,10 +118,11 @@ def getDOSBoxConfPath(path):
 
 def getSectionAutoexec(conf):
     autoexecConf = []
-    confArray = conf.splitlines()
+    confArray = conf
 
     # Find the [autoexec] section
     for line in confArray:
+        writeDebug(line)
         # If the current line is the [autoexec] header, if we've already found it, and that the line isn't empty
         if(line.lower() == '[autoexec]' or autoexecConf) and line:
             # Stop if we find another section header
@@ -144,12 +140,12 @@ def getSectionAutoexec(conf):
         # Try to fix the case senstitivity in mount lines...
         if 'mount' in autoexecConf[i].lower():
             writeDebug('Found mount line: ' + autoexecConf[i])
-            autoexecConf[i] = mountParser(autoexecConf[i])
+            autoexecConf[i] = parseConfigMountCommand(autoexecConf[i])
         #writeDebug('autoexec line: ' + autoexecConf[i])
 
     return autoexecConf
 
-def mountParser(line):
+def parseConfigMountCommand(line):
     mountArgs = shlex.split(line)
     driveLetter = mountArgs[1]
     localDir = mountArgs[2]
@@ -252,15 +248,18 @@ def getConfigPath(conf):
     return path
 
 def getConfigData(path):
+    writeDebug('get config dataaaaaa')
     try:
-        file = open(path, 'r')
-        data = file.read()
-        file.close()
+        with open(path, 'r') as file:
+            lines = file.read().splitlines()
     except Exception as e:
         writeDebug("Couldn't open config. Exception: " + str(e))
-    return data
+
+    writeDebug('got config dataaaaaa')
+    return lines
 
 def UpdateConfig(path):
+    config = configparser.ConfigParser()
     configData = getConfigData(path)
     autoexec = getSectionAutoexec(configData)
     # Parse the config file
@@ -287,18 +286,17 @@ def UpdateConfig(path):
         writeDebug('written autoexec: ' + line)
         saveConfig(line)
 
-writeDebug('APP ID: ' + STEAM_COMPAT_APP_ID)
-writeDebug('INSTALL PATH: ' + STEAM_COMPAT_INSTALL_PATH)
-writeDebug('Args: ' + str(sys.argv))
+def main():
+    writeDebug('APP ID: ' + STEAM_COMPAT_APP_ID)
+    writeDebug('INSTALL PATH: ' + STEAM_COMPAT_INSTALL_PATH)
+    writeDebug('Args: ' + str(sys.argv))
 
-args = parseArgs(sys.argv)
-configPath = getConfigPath(args.conf)
-UpdateConfig(configPath)
+    args = parseArgs(sys.argv)
+    configPath = getConfigPath(args.conf)
+    UpdateConfig(configPath)
+    cmd = newDosboxCommand(args)
+    writeDebug('CMD: ' + cmd)
+    os.system(cmd)
 
-#cmd = "flatpak run --filesystem=" + shlex.quote('~' + STEAM_COMPAT_INSTALL_PATH[len(HOME):]) + ' ' + DOSBOX + ' ' + executablePath + '-conf ' + shlex.quote(autoConfigPath) + ' -exit'
-#writeDebug('Old CMD: ' + cmd)
-
-cmd = newDosboxCommand(args)
-writeDebug('CMD: ' + cmd)
-
-os.system(cmd)
+if __name__ == "__main__":
+    main()
