@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 
+
+
 ### REFERENCES ###
 # https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/blob/master/docs/steam-compat-tool-interface.md
 # https://www.dosbox.com/wiki/Dosbox.conf
@@ -9,6 +11,10 @@
 # https://www.doomworld.com/forum/topic/127408-setting-up-dosbox-properly/
 # https://docs.python.org/3/howto/argparse.html
 # https://docs.python.org/3/library/argparse.html
+# readme template : https://github.com/othneildrew/Best-README-Template/blob/master/README.md
+# https://numpydoc.readthedocs.io/en/latest/example.html#example
+
+
 import sys
 import os
 import configparser
@@ -22,55 +28,6 @@ STEAM_COMPAT_APP_ID = str(os.environ.get("STEAM_COMPAT_APP_ID"))
 STEAM_COMPAT_INSTALL_PATH = str(os.environ.get("STEAM_COMPAT_INSTALL_PATH"))
 DOSBOX = 'io.github.dosbox-staging'
 
-# DOSBOX configuration template to override for settings better for Steam Deck
-templateDosboxConf = """
-[sdl]
-fullscreen=true
-fulldouble=false
-fullresolution=desktop
-output=opengl
-waitonerror=true
-[dosbox]
-memsize=32
-machine=svga_s3
-[cpu]
-core=auto
-cputype=auto
-[render]
-aspect=true
-scaler=hq3x
-[mixer]
-rate=44100
-blocksize=1024
-prebuffer=20
-[midi]
-mpu401=intelligent
-mididevice=default
-[sblaster]
-sbtype=sb16
-sbbase=220
-irq=5
-dma=1
-hdma=5
-sbmixer=true
-oplmode=opl3
-oplemu=compat
-oplrate=44100
-[gus]
-gus=true
-gusrate=44100
-gusbase=240
-gusirq=7
-gusdma=3
-ultradir=C:\\ULTRASND
-[speaker]
-pcspeaker=true
-pcrate=44100
-tandy=auto
-tandyrate=44100
-disney=true
-"""
-
 debugLog = '/home/deck/.steam/steam/compatibilitytools.d/HazeCrate/debug/debug_' + STEAM_COMPAT_APP_ID + '.log'
 autoConfigPath = STEAM_COMPAT_INSTALL_PATH + '/HazeCrate_AUTO_' + STEAM_COMPAT_APP_ID + '.conf'
 
@@ -80,17 +37,17 @@ if os.path.exists(autoConfigPath):
 if os.path.exists(debugLog):
     os.remove(debugLog)
 
-def writeDebug(l):
+def writeDebugLine(line):
     if(DEBUG):
         with open(debugLog, 'a') as f:
-            f.write(l + '\n')
+            f.write(line + '\n')
 
-def saveConfig(conf):
+def writeNewConfigLine(line):
     try:
         with open(autoConfigPath, 'a') as f:
-            f.write(conf + '\n')
+            f.write(line + '\n')
     except Exception as e:
-        writeDebug("Can't save config: " + autoConfigPath + "Exception: " + str(e))
+        writeDebugLine("Can't save config: " + autoConfigPath + "Exception: " + str(e))
 
 def file_exists_ci(file):
     # If the file doesn't exist in the case specified, loop through every file in the specified directory
@@ -100,7 +57,6 @@ def file_exists_ci(file):
         else:
             dir = './'
         for f in os.listdir(dir):
-            #writeDebug("File: " + f)
             # What if the current file and the file we are looking for were both lower case, would they match then?
             if str(f).lower() == str(os.path.basename(file)).lower():
                 return str(os.path.join(dir, f))
@@ -114,20 +70,20 @@ def getDOSBoxConfPath(path):
     if not STEAM_COMPAT_INSTALL_PATH in path:
         path = STEAM_COMPAT_INSTALL_PATH + '/' + path
     dosboxConfPath = file_exists_ci(path)
+
     return dosboxConfPath
 
 def getSectionAutoexec(conf):
     autoexecConf = []
-    confArray = conf
 
     # Find the [autoexec] section
-    for line in confArray:
-        writeDebug(line)
+    for line in conf:
+        writeDebugLine(line)
         # If the current line is the [autoexec] header, if we've already found it, and that the line isn't empty
         if(line.lower() == '[autoexec]' or autoexecConf) and line:
             # Stop if we find another section header
             if(line[0] == '[' and line.lower() != '[autoexec]'):
-                writeDebug("End autoexec")
+                writeDebugLine("End autoexec")
                 break
             autoexecConf.append(line)
 
@@ -139,9 +95,9 @@ def getSectionAutoexec(conf):
 
         # Try to fix the case senstitivity in mount lines...
         if 'mount' in autoexecConf[i].lower():
-            writeDebug('Found mount line: ' + autoexecConf[i])
+            writeDebugLine('Found mount line: ' + autoexecConf[i])
             autoexecConf[i] = parseConfigMountCommand(autoexecConf[i])
-        #writeDebug('autoexec line: ' + autoexecConf[i])
+        #writeDebugLine('autoexec line: ' + autoexecConf[i])
 
     return autoexecConf
 
@@ -156,26 +112,20 @@ def parseConfigMountCommand(line):
         path = str(localDirPath + '/' + d)
         searchPath = Path(path)
         localDirPath = file_exists_ci(str(searchPath.resolve()))
-
     path = Path(localDirPath)
-    writeDebug("LocalDirPath: " + localDirPath)
-    writeDebug("LocalDirPath, Resolved: " + str(path.resolve()))
-
-    # Shorten to 
+    writeDebugLine("LocalDirPath: " + localDirPath)
+    writeDebugLine("LocalDirPath, Resolved: " + str(path.resolve()))
     if str(HOME + '/') in localDirPath:
         localDirPath = "~/" + localDirPath[len(HOME) + 1:]
-
-    writeDebug("LocalDirPath, Final: " + localDirPath)
+    writeDebugLine("LocalDirPath, Final: " + localDirPath)
     mountArgs[2] = localDirPath
-
     if localDirPath == '':
         mountArgs[2] = './'
-        writeDebug('No local dir path: ./')
-
+        writeDebugLine('No local dir path: ./')
     mountArgs[2] = '"' + mountArgs[2] + '"'
-
     line = ' '.join(mountArgs)
-    writeDebug("Mount line (fixed): " + line)
+    writeDebugLine("Mount line (fixed): " + line)
+
     return line
 
 def parseArgs(args):
@@ -202,31 +152,32 @@ def parseArgs(args):
     argParser.add_argument('-printconf', action='store_true')
     argParser.add_argument('-eraseconf', action='store_true')
     argParser.add_argument('-erasemapper')
-
     try:
         results = argParser.parse_args(args)
     except:
-        writeDebug('Error parsing arguments ' + str(args))
-
-    writeDebug ("Arguments")
+        writeDebugLine('Error parsing arguments ' + str(args))
+    writeDebugLine ("Arguments")
     for k in results.__dict__:
-        writeDebug(str(k) + ', ' + str(results.__dict__[k]))
-    
+        writeDebugLine(str(k) + ', ' + str(results.__dict__[k]))
+
     return(results)
 
-def newDosboxCommand(a):
+def newDosboxCommand(args):
     command = []
     # flatpak run and set filesystem path
-    command.append("flatpak run --filesystem=" + shlex.quote('~' + STEAM_COMPAT_INSTALL_PATH[len(HOME):]))
+    #command.append("flatpak run --filesystem=" + shlex.quote('~' + STEAM_COMPAT_INSTALL_PATH[len(HOME):]))
+
+    # Need access to Steam games and script directory
+    # https://docs.flatpak.org/en/latest/sandbox-permissions.html
+    command.append("flatpak run --filesystem=~/.steam/steam/compatibilitytools.d/HazeCrate/ --filesystem=~/.local/share/Steam/")
+
     # DOSBox flatpak to use
     command.append(DOSBOX)
     # Executable if it was listed
-    if (a.name):
-        exePath = STEAM_COMPAT_INSTALL_PATH + '/' + (a.name).replace('\\','/')
-        writeDebug("EXE Path: " + exePath)
-        executable = file_exists_ci(exePath)
-        writeDebug("EXE Path: " + executable)
-        command.append(shlex.quote(executable))
+    if (args.name):
+        exePath = STEAM_COMPAT_INSTALL_PATH + '/' + (args.name).replace('\\','/')
+        exePath = file_exists_ci(exePath)
+        command.append(shlex.quote(exePath))
     # New DOSBox config
     command.append("-conf")
     command.append(shlex.quote(autoConfigPath))
@@ -237,25 +188,31 @@ def newDosboxCommand(a):
 
     return(cmdString)
 
+def getDosboxConfGlobalTemplate():
+    # DOSBOX configuration template to override for settings better for Steam Deck
+    path = os.path.dirname(__file__) + '/global_dosbox.conf'
+    with open(path, 'r') as file:
+        lines = file.read()
+
+    return(lines)
+
 def getConfigPath(conf):
     # Let's find the dosbox config file!
     if conf:
-        writeDebug('DOSBox config found: ' + conf)
+        writeDebugLine('DOSBox config found: ' + conf)
         path = getDOSBoxConfPath(os.getcwd() + '/' + str(conf).replace('\\','/'))
     else:
-        writeDebug('No config found. Is this even a DOSBox game?')
+        writeDebugLine('No config found. Is this even a DOSBox game?')
 
     return path
 
 def getConfigData(path):
-    writeDebug('get config dataaaaaa')
     try:
         with open(path, 'r') as file:
             lines = file.read().splitlines()
     except Exception as e:
-        writeDebug("Couldn't open config. Exception: " + str(e))
+        writeDebugLine("Couldn't open config. Exception: " + str(e))
 
-    writeDebug('got config dataaaaaa')
     return lines
 
 def UpdateConfig(path):
@@ -267,9 +224,10 @@ def UpdateConfig(path):
         config.read(path)
     # Usually exceptions are [autoexec] errors since configParser doesn't like the format.
     except Exception as e:
-        writeDebug("Couldn't parse config. Exception: " + str(e))
+        writeDebugLine("Couldn't parse config. Exception: " + str(e))
 
     ### Apply Steam Deck config template ###
+    templateDosboxConf = getDosboxConfGlobalTemplate()
     config.read_string(templateDosboxConf)
 
     # Delete the [autoexec] section. We handle it separately
@@ -277,25 +235,25 @@ def UpdateConfig(path):
 
     # Save modified config
     for section in config.sections():
-        saveConfig('[' + section + ']')
+        writeNewConfigLine('[' + section + ']')
         for (key, val) in config.items(section):
-            saveConfig(key + '=' + val)
+            writeNewConfigLine(key + '=' + val)
 
     # Save [autoexec] section
     for line in autoexec:
-        writeDebug('written autoexec: ' + line)
-        saveConfig(line)
+        writeDebugLine('written autoexec: ' + line)
+        writeNewConfigLine(line)
 
 def main():
-    writeDebug('APP ID: ' + STEAM_COMPAT_APP_ID)
-    writeDebug('INSTALL PATH: ' + STEAM_COMPAT_INSTALL_PATH)
-    writeDebug('Args: ' + str(sys.argv))
+    writeDebugLine('APP ID: ' + STEAM_COMPAT_APP_ID)
+    writeDebugLine('INSTALL PATH: ' + STEAM_COMPAT_INSTALL_PATH)
+    writeDebugLine('Args: ' + str(sys.argv))
 
     args = parseArgs(sys.argv)
     configPath = getConfigPath(args.conf)
     UpdateConfig(configPath)
     cmd = newDosboxCommand(args)
-    writeDebug('CMD: ' + cmd)
+    writeDebugLine('CMD: ' + cmd)
     os.system(cmd)
 
 if __name__ == "__main__":
