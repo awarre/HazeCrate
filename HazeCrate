@@ -1,7 +1,5 @@
 #!/usr/bin/python3
 
-
-
 ### REFERENCES ###
 # https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/blob/master/docs/steam-compat-tool-interface.md
 # https://www.dosbox.com/wiki/Dosbox.conf
@@ -13,7 +11,6 @@
 # https://docs.python.org/3/library/argparse.html
 # readme template : https://github.com/othneildrew/Best-README-Template/blob/master/README.md
 # https://numpydoc.readthedocs.io/en/latest/example.html#example
-
 
 import sys
 import os
@@ -94,12 +91,14 @@ def getSectionAutoexec(conf):
         autoexecConf[i] = autoexecConf[i].replace('\\','/')
 
         # Try to fix the case senstitivity in mount lines...
-        if 'mount' in autoexecConf[i].lower():
-            writeDebugLine('Found mount line: ' + autoexecConf[i])
+        if autoexecConf[i].lower().startswith('mount'):
             autoexecConf[i] = parseConfigMountCommand(autoexecConf[i])
-        #writeDebugLine('autoexec line: ' + autoexecConf[i])
 
+        # Try to fix the case senstitivity in imgmount lines...
+        if autoexecConf[i].lower().startswith('imgmount'):
+            autoexecConf[i] = parseConfigImgmountCommand(autoexecConf[i])
     return autoexecConf
+
 
 def parseConfigMountCommand(line):
     mountArgs = shlex.split(line)
@@ -115,7 +114,7 @@ def parseConfigMountCommand(line):
     path = Path(localDirPath)
     writeDebugLine("LocalDirPath: " + localDirPath)
     writeDebugLine("LocalDirPath, Resolved: " + str(path.resolve()))
-    if str(HOME + '/') in localDirPath:
+    if str(localDirPath).startswith(str(HOME + '/')):
         localDirPath = "~/" + localDirPath[len(HOME) + 1:]
     writeDebugLine("LocalDirPath, Final: " + localDirPath)
     mountArgs[2] = localDirPath
@@ -128,10 +127,37 @@ def parseConfigMountCommand(line):
 
     return line
 
+# Harvester
+# imgmount D -t iso "..\HARVEST_CD\HARVESTER_DISC1.ISO" "..\HARVEST_CD\HARVESTER_DISC2.ISO" "..\HARVEST_CD\HARVESTER_DISC3.ISO"
+# doc example
+# imgmount d c:\mr2_cd1.iso c:\mr2_cd2.iso -t iso
+def parseConfigImgmountCommand(line):
+    writeDebugLine('imgmount line: ' + line)
+    result = ''
+    args = shlex.split(line)
+    driveLetter = args[1]
+    for i in range(len(args)):
+        if str(args[i]).replace('"', '').lower().endswith('.iso'):
+            path = Path(args[i])
+            writeDebugLine("ISO: " + file_exists_ci(args[i]))
+            writeDebugLine("ISO, resolved: " + str(path.resolve()))
+            args[i] = '"' + str(path.resolve()) + '"'
+
+        args[i] = args[i].replace(str(HOME), '~')
+
+    result = ' '.join(args)
+    writeDebugLine('New imgmount line: ' + result)
+    #result = line
+    return result
+
+def validateMountPath(path):
+    validPath = path
+    return validPath
+
 def parseArgs(args):
     argParser = argparse.ArgumentParser()
     argParser.add_argument('steampath', nargs='?', default='')
-    argParser.add_argument('dosbox-exec', nargs='?', default='')
+    argParser.add_argument('--dosbox', default='')
     argParser.add_argument('name', nargs='?', default='')
     argParser.add_argument('-conf', help='DOSBox configuration file.', default='/dosbox.conf')
     argParser.add_argument('-exit', action='store_true')
@@ -154,13 +180,14 @@ def parseArgs(args):
     argParser.add_argument('-erasemapper')
     try:
         results = argParser.parse_args(args)
-    except:
+    except Exception as e:
         writeDebugLine('Error parsing arguments ' + str(args))
+        writeDebugLine('Exception: ' + str(e))
     writeDebugLine ("Arguments")
     for k in results.__dict__:
         writeDebugLine(str(k) + ', ' + str(results.__dict__[k]))
 
-    return(results)
+    return results
 
 def newDosboxCommand(args):
     command = []

@@ -1,5 +1,5 @@
 "manifest"
 {
     "version" "1"
-    "commandline" "/HazeCrate"
+    "commandline" "/HazeCrate --dosbox"
 }
