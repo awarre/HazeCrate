@@ -1,7 +1,5 @@
 #!/usr/bin/python3
 
-
-
 ### REFERENCES ###
 # https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/blob/master/docs/steam-compat-tool-interface.md
 # https://www.dosbox.com/wiki/Dosbox.conf
@@ -14,7 +12,6 @@
 # readme template : https://github.com/othneildrew/Best-README-Template/blob/master/README.md
 # https://numpydoc.readthedocs.io/en/latest/example.html#example
 
-
 import sys
 import os
 import configparser
@@ -24,12 +21,14 @@ from pathlib import Path
 
 DEBUG = True
 HOME = os.path.expanduser("~")
-STEAM_COMPAT_APP_ID = str(os.environ.get("STEAM_COMPAT_APP_ID")) 
-STEAM_COMPAT_INSTALL_PATH = str(os.environ.get("STEAM_COMPAT_INSTALL_PATH"))
+STEAM_APP_ID = str(os.environ.get("STEAM_COMPAT_APP_ID")) 
+STEAM_GAME_INSTALL_PATH = str(os.environ.get("STEAM_COMPAT_INSTALL_PATH"))
+STEAM_INSTALL_PATH = str(os.environ.get("STEAM_COMPAT_CLIENT_INSTALL_PATH"))
+SCRIPT_PATH = str(os.path.dirname(__file__))
 DOSBOX = 'io.github.dosbox-staging'
 
-debugLog = '/home/deck/.steam/steam/compatibilitytools.d/HazeCrate/debug/debug_' + STEAM_COMPAT_APP_ID + '.log'
-autoConfigPath = STEAM_COMPAT_INSTALL_PATH + '/HazeCrate_AUTO_' + STEAM_COMPAT_APP_ID + '.conf'
+debugLog = SCRIPT_PATH + '/debug/debug_' + STEAM_APP_ID + '.log'
+autoConfigPath = STEAM_GAME_INSTALL_PATH + '/HazeCrate_AUTO_' + STEAM_APP_ID + '.conf'
 
 if os.path.exists(autoConfigPath):
     os.remove(autoConfigPath)
@@ -67,8 +66,8 @@ def file_exists_ci(file):
         return str(file)
 
 def getDOSBoxConfPath(path):
-    if not STEAM_COMPAT_INSTALL_PATH in path:
-        path = STEAM_COMPAT_INSTALL_PATH + '/' + path
+    if not STEAM_GAME_INSTALL_PATH in path:
+        path = STEAM_GAME_INSTALL_PATH + '/' + path
     dosboxConfPath = file_exists_ci(path)
 
     return dosboxConfPath
@@ -78,12 +77,12 @@ def getSectionAutoexec(conf):
 
     # Find the [autoexec] section
     for line in conf:
-        writeDebugLine(line)
+        #writeDebugLine(line)
         # If the current line is the [autoexec] header, if we've already found it, and that the line isn't empty
         if(line.lower() == '[autoexec]' or autoexecConf) and line:
             # Stop if we find another section header
             if(line[0] == '[' and line.lower() != '[autoexec]'):
-                writeDebugLine("End autoexec")
+                #writeDebugLine("End autoexec")
                 break
             autoexecConf.append(line)
 
@@ -94,44 +93,55 @@ def getSectionAutoexec(conf):
         autoexecConf[i] = autoexecConf[i].replace('\\','/')
 
         # Try to fix the case senstitivity in mount lines...
-        if 'mount' in autoexecConf[i].lower():
-            writeDebugLine('Found mount line: ' + autoexecConf[i])
+        if autoexecConf[i].lower().startswith('mount'):
             autoexecConf[i] = parseConfigMountCommand(autoexecConf[i])
-        #writeDebugLine('autoexec line: ' + autoexecConf[i])
 
+        # Try to fix the case senstitivity in imgmount lines...
+        if autoexecConf[i].lower().startswith('imgmount'):
+            autoexecConf[i] = parseConfigImgmountCommand(autoexecConf[i])
     return autoexecConf
 
 def parseConfigMountCommand(line):
-    mountArgs = shlex.split(line)
-    driveLetter = mountArgs[1]
-    localDir = mountArgs[2]
-    localDir = localDir.replace('"', '')
-    localDirPathArray = localDir.split('/')
-    localDirPath = os.getcwd()
-    for d in localDirPathArray:
-        path = str(localDirPath + '/' + d)
-        searchPath = Path(path)
-        localDirPath = file_exists_ci(str(searchPath.resolve()))
-    path = Path(localDirPath)
-    writeDebugLine("LocalDirPath: " + localDirPath)
-    writeDebugLine("LocalDirPath, Resolved: " + str(path.resolve()))
-    if str(HOME + '/') in localDirPath:
-        localDirPath = "~/" + localDirPath[len(HOME) + 1:]
-    writeDebugLine("LocalDirPath, Final: " + localDirPath)
-    mountArgs[2] = localDirPath
-    if localDirPath == '':
-        mountArgs[2] = './'
-        writeDebugLine('No local dir path: ./')
-    mountArgs[2] = '"' + mountArgs[2] + '"'
-    line = ' '.join(mountArgs)
-    writeDebugLine("Mount line (fixed): " + line)
-
+    args = shlex.split(line)
+    args[2] = validateMountPath(args[2])
+    line = ' '.join(args)
     return line
 
+def parseConfigImgmountCommand(line):
+    args = shlex.split(line)
+    for i in range(len(args)):
+        if str(args[i]).replace('"', '').lower().endswith('.iso'):
+            args[i] = validateMountPath(args[i])
+    line = ' '.join(args)
+    return line
+
+def validateMountPath(path):
+    writeDebugLine("Intial Path: " + path)
+    pathDirs = (path.replace('"', '')).split('/')
+    dir = os.getcwd()
+    for d in pathDirs:
+        dir = dir + '/' + d
+        searchPath = Path(dir)
+        dir = file_exists_ci(str(searchPath.resolve()))
+    newPath = str(Path(dir).resolve())
+    newPath = newPath.replace(str(HOME), '~')
+    newPath =  '"' + newPath + '"'
+    writeDebugLine("Updated Path: " + newPath)
+    return newPath
+
 def parseArgs(args):
+    """
+    for i in range(len(args)):
+        if " " in args[i]:
+            args[i] = args[i].strip('"')
+            args[i] = args[i].strip("'")
+            args[i] = '"' + args[i] + '"'
+            args[i] = args[i].replace(' ','')
+    """
+    writeDebugLine('Arguments ' + str(args))
     argParser = argparse.ArgumentParser()
     argParser.add_argument('steampath', nargs='?', default='')
-    argParser.add_argument('dosbox-exec', nargs='?', default='')
+    argParser.add_argument('--dosbox', default='')
     argParser.add_argument('name', nargs='?', default='')
     argParser.add_argument('-conf', help='DOSBox configuration file.', default='/dosbox.conf')
     argParser.add_argument('-exit', action='store_true')
@@ -153,29 +163,32 @@ def parseArgs(args):
     argParser.add_argument('-eraseconf', action='store_true')
     argParser.add_argument('-erasemapper')
     try:
+        writeDebugLine("trying to parse args")
         results = argParser.parse_args(args)
-    except:
+    except Exception as e:
         writeDebugLine('Error parsing arguments ' + str(args))
+        writeDebugLine('Exception: ' + str(e))
+    """
     writeDebugLine ("Arguments")
     for k in results.__dict__:
         writeDebugLine(str(k) + ', ' + str(results.__dict__[k]))
-
-    return(results)
+    """   
+    return results
 
 def newDosboxCommand(args):
     command = []
     # flatpak run and set filesystem path
-    #command.append("flatpak run --filesystem=" + shlex.quote('~' + STEAM_COMPAT_INSTALL_PATH[len(HOME):]))
+    #command.append("flatpak run --filesystem=" + shlex.quote('~' + STEAM_GAME_INSTALL_PATH[len(HOME):]))
 
     # Need access to Steam games and script directory
     # https://docs.flatpak.org/en/latest/sandbox-permissions.html
-    command.append("flatpak run --filesystem=~/.steam/steam/compatibilitytools.d/HazeCrate/ --filesystem=~/.local/share/Steam/")
+    command.append('flatpak run --filesystem="' + SCRIPT_PATH + '" --filesystem="' + STEAM_INSTALL_PATH + '"')
 
     # DOSBox flatpak to use
     command.append(DOSBOX)
     # Executable if it was listed
     if (args.name):
-        exePath = STEAM_COMPAT_INSTALL_PATH + '/' + (args.name).replace('\\','/')
+        exePath = STEAM_GAME_INSTALL_PATH + '/' + (args.name).replace('\\','/')
         exePath = file_exists_ci(exePath)
         command.append(shlex.quote(exePath))
     # New DOSBox config
@@ -241,12 +254,13 @@ def UpdateConfig(path):
 
     # Save [autoexec] section
     for line in autoexec:
-        writeDebugLine('written autoexec: ' + line)
+        #writeDebugLine('written autoexec: ' + line)
         writeNewConfigLine(line)
 
 def main():
-    writeDebugLine('APP ID: ' + STEAM_COMPAT_APP_ID)
-    writeDebugLine('INSTALL PATH: ' + STEAM_COMPAT_INSTALL_PATH)
+    writeDebugLine('APP ID: ' + STEAM_APP_ID)
+    writeDebugLine('INSTALL PATH: ' + STEAM_GAME_INSTALL_PATH)
+    writeDebugLine('HAZECRATE PATH: ' + SCRIPT_PATH)  
     writeDebugLine('Args: ' + str(sys.argv))
 
     args = parseArgs(sys.argv)
