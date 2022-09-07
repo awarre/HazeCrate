@@ -28,10 +28,13 @@ SCRIPT_PATH = str(os.path.dirname(__file__))
 DOSBOX = 'io.github.dosbox-staging'
 
 debugLog = SCRIPT_PATH + '/debug/debug_' + STEAM_APP_ID + '.log'
+
+"""
 autoConfigPath = STEAM_GAME_INSTALL_PATH + '/HazeCrate_AUTO_' + STEAM_APP_ID + '.conf'
 
 if os.path.exists(autoConfigPath):
     os.remove(autoConfigPath)
+"""
 
 if os.path.exists(debugLog):
     os.remove(debugLog)
@@ -64,6 +67,18 @@ def file_exists_ci(file):
     else:
         # Yeah that file is right here dude
         return str(file)
+
+def createAutoconfPath():
+    # Base directory
+    path = SCRIPT_PATH + "/configs/" + os.path.basename(STEAM_GAME_INSTALL_PATH)
+    p = Path(path)
+    p.mkdir(parents=True, exist_ok=True)
+    path = SCRIPT_PATH + "/configs/" + os.path.basename(STEAM_GAME_INSTALL_PATH) + '/HazeCrate_AUTO_' + STEAM_APP_ID + '.conf'
+    #Cleanup old config
+    if os.path.exists(path):
+        os.remove(path)
+
+    return path
 
 def getDOSBoxConfPath(path):
     if not STEAM_GAME_INSTALL_PATH in path:
@@ -229,6 +244,7 @@ def getConfigData(path):
     return lines
 
 def UpdateConfig(path):
+
     config = configparser.ConfigParser()
     configData = getConfigData(path)
     autoexec = getSectionAutoexec(configData)
@@ -258,14 +274,17 @@ def UpdateConfig(path):
         writeNewConfigLine(line)
 
 def main():
+    global autoConfigPath
     writeDebugLine('APP ID: ' + STEAM_APP_ID)
     writeDebugLine('INSTALL PATH: ' + STEAM_GAME_INSTALL_PATH)
     writeDebugLine('HAZECRATE PATH: ' + SCRIPT_PATH)  
     writeDebugLine('Args: ' + str(sys.argv))
 
     args = parseArgs(sys.argv)
-    configPath = getConfigPath(args.conf)
-    UpdateConfig(configPath)
+    devConfigPath = getConfigPath(args.conf)
+    autoConfigPath = createAutoconfPath()
+    writeDebugLine("Autoconfig path: " + autoConfigPath)
+    UpdateConfig(devConfigPath)
     cmd = newDosboxCommand(args)
     writeDebugLine('CMD: ' + cmd)
     os.system(cmd)
