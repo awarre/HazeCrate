@@ -147,22 +147,12 @@ def getConfHash(path):
     return hash
 
 def parseArgs(args):
-    """
-    for i in range(len(args)):
-        if " " in args[i]:
-            args[i] = args[i].strip('"')
-            args[i] = args[i].strip("'")
-            args[i] = '"' + args[i] + '"'
-            args[i] = args[i].replace(' ','')
-    """
-    writeDebugLine('Arguments ' + str(args))
     argParser = argparse.ArgumentParser()
-    argParser.add_argument('steampath', nargs='?', default='')
-    argParser.add_argument('--dosbox', default='')
-    argParser.add_argument('name', nargs='?', default='')
+    argParser.add_argument('compatpath', nargs='?', default='')
+    argParser.add_argument('--dosbox', nargs='+', default='')
     argParser.add_argument('-conf', help='DOSBox configuration file.', default='/dosbox.conf')
     argParser.add_argument('-exit', action='store_true')
-    argParser.add_argument('-c')
+    argParser.add_argument('-c', action='store_true')
     argParser.add_argument('-fullscreen', action='store_true')
     argParser.add_argument('-lang')
     argParser.add_argument('-machine')
@@ -185,11 +175,7 @@ def parseArgs(args):
     except Exception as e:
         writeDebugLine('Error parsing arguments ' + str(args))
         writeDebugLine('Exception: ' + str(e))
-    """
-    writeDebugLine ("Arguments")
-    for k in results.__dict__:
-        writeDebugLine(str(k) + ', ' + str(results.__dict__[k]))
-    """   
+ 
     return results
 
 def newDosboxCommand(args):
@@ -199,8 +185,8 @@ def newDosboxCommand(args):
     # DOSBox flatpak to use
     command.append(DOSBOX)
     # Executable if it was listed
-    if (args.name):
-        exePath = STEAM_GAME_INSTALL_PATH + '/' + (args.name).replace('\\','/')
+    if len(args.dosbox) > 1:
+        exePath = STEAM_GAME_INSTALL_PATH + '/' + (args.dosbox[1]).replace('\\','/')
         exePath = file_exists_ci(exePath)
         command.append(shlex.quote(exePath))
     # New DOSBox config
