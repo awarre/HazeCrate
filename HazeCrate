@@ -36,19 +36,19 @@ debugLog = SCRIPT_PATH + '/debug/debug_' + STEAM_APP_ID + '.log'
 if os.path.exists(debugLog):
     os.remove(debugLog)
 
-def writeDebugLine(line):
+def writeDebugLine(line: str):
     if(DEBUG):
         with open(debugLog, 'a') as f:
             f.write(line + '\n')
 
-def writeNewConfigLine(line):
+def writeNewConfigLine(line: str):
     try:
         with open(autoConfigPath, 'a') as f:
             f.write(line + '\n')
     except Exception as e:
         writeDebugLine("Can't save config: " + autoConfigPath + "Exception: " + str(e))
 
-def file_exists_ci(file):
+def file_exists_ci(file: str) -> str:
     # If the file doesn't exist in the case specified, loop through every file in the specified directory
     if not os.path.exists(file):
         if '/' in file:
@@ -65,7 +65,7 @@ def file_exists_ci(file):
         # Yeah that file is right here dude
         return str(file)
 
-def createAutoconfPath(conf_path):
+def createAutoconfPath(conf_path: str) -> str:
     # Base directory
     path = getNewConfPath(conf_path)
     p = Path(path)
@@ -80,18 +80,18 @@ def createAutoconfPath(conf_path):
 
     return path
 
-def getNewConfPath(conf_path):
+def getNewConfPath(conf_path: str):
     # Game specific config directory
     path = SCRIPT_PATH + "/configs/" + os.path.basename(STEAM_GAME_INSTALL_PATH)
     return path
 
-def getDOSBoxConfPath(path):
+def getDOSBoxConfPath(path: str) -> str:
     if not STEAM_GAME_INSTALL_PATH in path:
         path = STEAM_GAME_INSTALL_PATH + '/' + path
     dosboxConfPath = file_exists_ci(path)
     return dosboxConfPath
 
-def getSectionAutoexec(conf):
+def getSectionAutoexec(conf: str) -> str:
     autoexecConf = []
     # Find the [autoexec] section
     for line in conf:
@@ -117,13 +117,13 @@ def getSectionAutoexec(conf):
             autoexecConf[i] = parseConfigImgmountCommand(autoexecConf[i])
     return autoexecConf
 
-def parseConfigMountCommand(line):
+def parseConfigMountCommand(line: str) -> str:
     args = shlex.split(line)
     args[2] = validateMountPath(args[2])
     line = ' '.join(args)
     return line
 
-def parseConfigImgmountCommand(line):
+def parseConfigImgmountCommand(line: str) -> str:
     args = shlex.split(line)
     for i in range(len(args)):
         if str(args[i]).replace('"', '').lower().endswith('.iso'):
@@ -131,7 +131,7 @@ def parseConfigImgmountCommand(line):
     line = ' '.join(args)
     return line
 
-def validateMountPath(path):
+def validateMountPath(path: str) -> str:
     writeDebugLine("Intial Path: " + path)
     pathDirs = (path.replace('"', '')).split('/')
     dir = os.getcwd()
@@ -145,12 +145,12 @@ def validateMountPath(path):
     writeDebugLine("Updated Path: " + newPath)
     return newPath
 
-def getConfHash(path):
+def getConfHash(path: str) -> str:
     hash = str(hashlib.sha256(path.encode()).hexdigest())
     hash = hash[-8:]
     return hash
 
-def parseArgs(args):
+def parseArgs(args: list) -> argparse.Namespace:
     argParser = argparse.ArgumentParser()
     argParser.add_argument('compatpath', nargs='?', default='')
     argParser.add_argument('--dosbox', nargs='+', default='')
@@ -182,7 +182,7 @@ def parseArgs(args):
  
     return results
 
-def newDosboxCommand(args):
+def newDosboxCommand(args: list) -> str:
     command = []
     # flatpak run and set filesystem path
     command.append('flatpak run --filesystem="' + SCRIPT_PATH + '" --filesystem="' + STEAM_INSTALL_PATH + '"')
@@ -203,7 +203,7 @@ def newDosboxCommand(args):
 
     return(cmdString)
 
-def getDosboxConfGlobalTemplate():
+def getDosboxConfGlobalTemplate() -> list:
     # DOSBOX configuration template to override for settings better for Steam Deck
     path = os.path.dirname(__file__) + '/global_dosbox.conf'
     with open(path, 'r') as file:
@@ -211,7 +211,7 @@ def getDosboxConfGlobalTemplate():
 
     return(lines)
 
-def getDosboxConfCustomTemplate(conf_path):
+def getDosboxConfCustomTemplate(conf_path: str) -> list:
     # DOSBOX configuration template to override for settings better for Steam Deck
     path = getNewConfPath(conf_path) + '/custom.conf'
     if os.path.exists(path):
@@ -224,7 +224,7 @@ def getDosboxConfCustomTemplate(conf_path):
     return(lines)
 
 
-def getConfigPath(conf):
+def getConfigPath(conf: str) -> str:
     # Let's find the dosbox config file!
     if conf:
         writeDebugLine('DOSBox config found: ' + conf)
@@ -234,7 +234,7 @@ def getConfigPath(conf):
 
     return path
 
-def getConfigData(path):
+def getConfigData(path: str) -> list:
     try:
         with open(path, 'r') as file:
             lines = file.read().splitlines()
@@ -243,7 +243,7 @@ def getConfigData(path):
 
     return lines
 
-def UpdateConfig(path):
+def UpdateConfig(path: str):
     config = configparser.ConfigParser()
     configData = getConfigData(path)
     autoexec = getSectionAutoexec(configData)
