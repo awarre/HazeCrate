@@ -2,18 +2,13 @@
 
 ### REFERENCES ###
 # https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/blob/master/docs/steam-compat-tool-interface.md
-# https://www.dosbox.com/wiki/Dosbox.conf
-# https://www.dosbox.com/DOSBoxManual.html
-# https://www.dosbox.com/wiki/MOUNT
-# https://github.com/dosbox-staging/dosbox-staging/wiki/Config-file-examples
-# https://www.doomworld.com/forum/topic/127408-setting-up-dosbox-properly/
-# https://docs.python.org/3/howto/argparse.html
-# https://docs.python.org/3/library/argparse.html
 # readme template : https://github.com/othneildrew/Best-README-Template/blob/master/README.md
 
 ## STYLE GUIDES
 # https://peps.python.org/pep-0008/
+# DOCString https://numpydoc.readthedocs.io/en/latest/format.html#notes
 # function naming: https://docs.microsoft.com/en-us/powershell/scripting/developer/cmdlet/approved-verbs-for-windows-powershell-commands?view=powershell-7.2
+# https://docutils.sourceforge.io/docs/user/rst/quickref.html#inline-markup
 
 import sys
 import os
@@ -25,19 +20,18 @@ from pathlib import Path
 
 # CONFIGURATION
 DEBUG = True
-DOSBOX = 'io.github.dosbox-staging'
+DOSBOX_PATH = 'io.github.dosbox-staging'
 
-# GLOBALS
+# GLOBAL CONSTANTS
 HOME = os.path.expanduser("~")
 STEAM_APP_ID = str(os.environ.get("STEAM_COMPAT_APP_ID")) 
 STEAM_GAME_INSTALL_PATH = str(os.environ.get("STEAM_COMPAT_INSTALL_PATH"))
 STEAM_INSTALL_PATH = str(os.environ.get("STEAM_COMPAT_CLIENT_INSTALL_PATH"))
 SCRIPT_PATH = str(os.path.dirname(__file__))
+DEBUG_LOG_PATH = SCRIPT_PATH + '/debug/debug_' + STEAM_APP_ID + '.log'
 
-debugLog = SCRIPT_PATH + '/debug/debug_' + STEAM_APP_ID + '.log'
-
-if os.path.exists(debugLog):
-    os.remove(debugLog)
+if os.path.exists(DEBUG_LOG_PATH):
+    os.remove(DEBUG_LOG_PATH)
 
 def write_debug_line(line: str):
     """
@@ -49,7 +43,7 @@ def write_debug_line(line: str):
         String to log.
     """
     if(DEBUG):
-        with open(debugLog, 'a') as f:
+        with open(DEBUG_LOG_PATH, 'a') as f:
             f.write(line + '\n')
 
 def write_new_dosbox_config_line(line: str):
@@ -143,7 +137,20 @@ def get_new_dosbox_conf_dir(conf_path: str):
     conf_path = SCRIPT_PATH + "/configs/" + os.path.basename(STEAM_GAME_INSTALL_PATH)
     return conf_path
 
-def update_autoexec_section(conf: str) -> str:
+def update_autoexec_section(conf: list) -> list:
+    """
+    Converts [autoexec] section from DOSBox config to proper Linux format.
+
+    Parameters
+    ----------
+    conf : list
+        Existing [autoexec] section from default DOSBox config.
+
+    Returns
+    -------
+    list
+        Modified [autoexec] section of config.
+    """
     autoexecConf = []
     # Find the [autoexec] section
     for line in conf:
@@ -170,12 +177,46 @@ def update_autoexec_section(conf: str) -> str:
     return autoexecConf
 
 def update_mount(line: str) -> str:
+    """
+    Updates the mount commmand from default config to work on Linux.
+
+    Parameters
+    ----------
+    line : str
+        Existing mount command.
+
+    Returns
+    -------
+    str
+        Updated mount command.
+
+    Notes
+    -------
+    `DOSBox MOUNT Command https://www.dosbox.com/wiki/MOUNT`_
+    """
     args = shlex.split(line)
     args[2] = convert_mount_command_path_format(args[2])
     line = ' '.join(args)
     return line
 
 def update_imgmount(line: str) -> str:
+    """
+    Updates the imgmount commmand from default config to work on Linux.
+
+    Parameters
+    ----------
+    line : str
+        Existing imgmount command.
+
+    Returns
+    -------
+    str
+        Updated imgmount command.
+
+    Notes
+    -------
+    `DOSBox IMGMOUNT Command https://www.dosbox.com/wiki/IMGMOUNT`_
+    """
     args = shlex.split(line)
     for i in range(len(args)):
         if str(args[i]).replace('"', '').lower().endswith('.iso'):
@@ -184,6 +225,19 @@ def update_imgmount(line: str) -> str:
     return line
 
 def convert_mount_command_path_format(path: str) -> str:
+    """
+    Resolves case-corrected absolute (img)mount paths.
+
+    Parameters
+    ----------
+    path : str
+        Existing path from command.
+
+    Returns
+    -------
+    str
+        Case-corrected absolute path.
+    """
     write_debug_line("Intial Path: " + path)
     pathDirs = (path.replace('"', '')).split('/')
     dir = os.getcwd()
@@ -198,11 +252,44 @@ def convert_mount_command_path_format(path: str) -> str:
     return newPath
 
 def get_dosbox_conf_hash(path: str) -> str:
+    """
+    Generates an 8 character hash from a string.
+
+    Parameters
+    ----------
+    path : str
+        String to hash.
+
+    Returns
+    -------
+    str
+        8 character hash string.
+
+    Notes
+    -------
+    This is used to create unique auto config files for each launch option for the game. Many games include multiple configs/EXEs.
+    """
     hash = str(hashlib.sha256(path.encode()).hexdigest())
     hash = hash[-8:]
     return hash
 
 def parse_args(args: list) -> argparse.Namespace:
+    """
+    Parse DOSBox command line arguments and paths from Steam args
+
+    Parameters
+    ----------
+    args : list
+        Arguments list from sys.argv
+
+    Returns
+    -------
+    argparse.Namespace
+        Returns an argparse Namespace with the DOSBox arguments received from Steam
+
+    Notes
+    `DOSBox Command Line Parameters https://www.dosbox.com/wiki/Usage`_
+    """
     argParser = argparse.ArgumentParser()
     argParser.add_argument('compatpath', nargs='?', default='')
     argParser.add_argument('--dosbox', nargs='+', default='')
@@ -226,7 +313,6 @@ def parse_args(args: list) -> argparse.Namespace:
     argParser.add_argument('-eraseconf', action='store_true')
     argParser.add_argument('-erasemapper')
     try:
-        write_debug_line("trying to parse args")
         results = argParser.parse_args(args)
     except Exception as e:
         write_debug_line('Error parsing arguments ' + str(args))
@@ -234,12 +320,25 @@ def parse_args(args: list) -> argparse.Namespace:
  
     return results
 
-def new_dosbox_command(args: list) -> str:
+def new_dosbox_command(args: argparse.Namespace) -> str:
+    """
+    Returns the new DOSBox command to run including new config files.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Namespace will all of the arguments received from Steam.
+
+    Returns
+    -------
+    str
+        Returns the new command to launch the game.
+    """
     command = []
     # flatpak run and set filesystem path
     command.append('flatpak run --filesystem="' + SCRIPT_PATH + '" --filesystem="' + STEAM_INSTALL_PATH + '"')
     # DOSBox flatpak to use
-    command.append(DOSBOX)
+    command.append(DOSBOX_PATH)
     # Executable if it was listed
     if len(args.dosbox) > 1:
         exePath = STEAM_GAME_INSTALL_PATH + '/' + (args.dosbox[1]).replace('\\','/')
@@ -256,7 +355,14 @@ def new_dosbox_command(args: list) -> str:
     return(cmdString)
 
 def get_dosbox_conf_global_template() -> list:
-    # DOSBOX configuration template to override for settings better for Steam Deck
+    """
+    Gives path to DOSBOX config template to override with settings better for Steam Deck
+
+    Returns
+    -------
+    list
+        Returns the template config as a list.
+    """
     path = os.path.dirname(__file__) + '/global_dosbox.conf'
     with open(path, 'r') as file:
         lines = file.read()
@@ -264,7 +370,19 @@ def get_dosbox_conf_global_template() -> list:
     return(lines)
 
 def get_dosbox_conf_custom_template(conf_path: str) -> list:
-    # DOSBOX configuration template to override for settings better for Steam Deck
+    """
+    Returns custom DOSBox config for game
+
+    Parameters
+    ----------
+    conf_path : str
+        Path to existing default DOSBox config file
+
+    Returns
+    -------
+    list
+        Lines of the custom.conf file. Empty string if it doesn't exist.
+    """
     path = get_new_dosbox_conf_dir(conf_path) + '/custom.conf'
     if os.path.exists(path):
         write_debug_line("custom.conf found: " + path)
@@ -277,19 +395,44 @@ def get_dosbox_conf_custom_template(conf_path: str) -> list:
 
 
 def get_default_dosbox_conf_path(conf: str) -> str:
-    # Let's find the dosbox config file!
+    """
+    Locate the default DOSBox config and convert it to absolute Linux path.
+
+    Parameters
+    ----------
+    conf : str
+        Path to the DOSBox conf file from Steam arguments.
+
+    Returns
+    -------
+    str
+        Returns Linux path to config file.
+    """
     if conf:
         write_debug_line('DOSBox config found: ' + conf)
         path = os.getcwd() + '/' + str(conf).replace('\\','/')
+        # Try to make relative path more absolute
         if not STEAM_GAME_INSTALL_PATH in path:
             path = STEAM_GAME_INSTALL_PATH + '/' + path
         path = file_exists_ci(path)
     else:
         write_debug_line('No config found. Is this even a DOSBox game?')
-
     return path
 
 def get_default_dosbox_conf_data(path: str) -> list:
+    """
+    Returns the DOSBox conf file as a list of strings.
+
+    Parameters
+    ----------
+    path : str
+        Path to DOSBox config file.
+
+    Returns
+    -------
+    list
+        DOSBox config file lines as list of strings.
+    """
     try:
         with open(path, 'r') as file:
             lines = file.read().splitlines()
@@ -299,6 +442,23 @@ def get_default_dosbox_conf_data(path: str) -> list:
     return lines
 
 def create_auto_dosbox_conf(path: str):
+    """
+    Creates new DOSBox configuration file for game based on existing configs.
+
+    Parameters
+    ----------
+    path : str
+        Path to default DOSBox config file.
+
+    Notes
+    ----------
+    DOSBox config file order of precedence (higher overrides lower): 
+    Custom (per-game custom config) > Global Template (default included with HazeCrate) > Default (included with game)
+
+    `DOSBox.conf https://www.dosbox.com/wiki/Dosbox.conf`_
+    `DOSBox-staging Config file examples https://github.com/dosbox-staging/dosbox-staging/wiki/Config-file-examples`_
+
+    """
     config = configparser.ConfigParser()
     configData = get_default_dosbox_conf_data(path)
     autoexec = update_autoexec_section(configData)
