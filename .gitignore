@@ -1,8 +1,1 @@
-/output.log
-run-old.txt
-run-backup.txt
-test.py
-hazecrate.png
-logo.blend
-logo.xcf
-
+.gitignore
