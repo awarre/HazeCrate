@@ -74,21 +74,19 @@ def file_exists_ci(path: str) -> str:
     str
         Case corrected file path, or empty string if path doesn't exist.
     """
-    # If the file doesn't exist in the case specified, loop through every file in the specified directory
+    # If file doesn't exist in the case specified, loop through directory
     if not os.path.exists(path):
         if '/' in path:
             dir = os.path.dirname(path)
         else:
             dir = './'
         for p in os.listdir(dir):
-            # What if the current file and the file we are looking for were both lower case, would they match then?
             if str(p).lower() == str(os.path.basename(path)).lower():
                 return str(os.path.join(dir, p))
         # No file found?
         return ''
-    else:
-        # Yeah that file is right here dude
-        return str(path)
+    
+    return str(path)
 
 def create_dosbox_autoconf_path(conf_path: str) -> str:
     """
