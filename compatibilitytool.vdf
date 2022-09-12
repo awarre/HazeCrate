@@ -1,13 +1,13 @@
 "compatibilitytools"
 {
-    "compat_tools"
+  "compat_tools"
+  {
+    "hazecrate"
     {
-        "DOSBox"
-        {
-            "install_path" "."
-            "display_name" "HazeCrate"
-            "from_oslist" "windows"
-            "to_oslist" "linux"
-        }
+      "install_path" "."
+      "display_name" "HazeCrate (native DOSBox)"
+      "from_oslist" "windows"
+      "to_oslist" "linux"
     }
+  }
 }
