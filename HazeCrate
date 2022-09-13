@@ -11,12 +11,6 @@ _type_
 ### REFERENCES ###
 # https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/blob/master/docs/steam-compat-tool-interface.md
 
-## STYLE GUIDES
-# https://peps.python.org/pep-0008/
-# DOCString https://numpydoc.readthedocs.io/en/latest/format.html#notes
-# function naming: https://docs.microsoft.com/en-us/powershell/scripting/developer/cmdlet/approved-verbs-for-windows-powershell-commands?view=powershell-7.2
-# https://docutils.sourceforge.io/docs/user/rst/quickref.html#inline-markup
-
 import sys
 import os
 import configparser
@@ -89,12 +83,12 @@ def file_exists_ci(path: str) -> str:
     # Look for path regardless of case
     if not os.path.exists(path):
         if '/' in path:
-            dir = os.path.dirname(path)
+            validate_dir = os.path.dirname(path)
         else:
-            dir = './'
-        for p in os.listdir(dir):
+            validate_dir = './'
+        for p in os.listdir(validate_dir):
             if str(p).lower() == str(os.path.basename(path)).lower():
-                return str(os.path.join(dir, p))
+                return str(os.path.join(validate_dir, p))
         # No file found?
         return ''
     return str(path)
@@ -463,15 +457,18 @@ def create_auto_dosbox_conf(path: str):
     Notes
     ----------
     DOSBox config file order of precedence (higher overrides lower): 
-    Custom (per-game custom config) > Global Template (default included with HazeCrate) > Default (included with game)
+    1. Custom (per-game custom config)
+    2. Global Template (default included with HazeCrate)
+    3. Default (included with game)
 
     `DOSBox.conf https://www.dosbox.com/wiki/Dosbox.conf`_
-    `DOSBox-staging Config file examples https://github.com/dosbox-staging/dosbox-staging/wiki/Config-file-examples`_
+    `DOSBox-staging Config file examples
+    https://github.com/dosbox-staging/dosbox-staging/wiki/Config-file-examples`_
 
     """
     config = configparser.ConfigParser()
-    configData = get_default_dosbox_conf_data(path)
-    autoexec = update_autoexec_section(configData)
+    config_data = get_default_dosbox_conf_data(path)
+    autoexec = update_autoexec_section(config_data)
     # Parse the game's included dosbox config
     try:
         config.read(path)
@@ -480,12 +477,12 @@ def create_auto_dosbox_conf(path: str):
         write_debug_line("Couldn't parse config. Exception: " + str(e))
 
     # Global config template will apply baseline settings.
-    templateDosboxConf = get_dosbox_conf_global_template()
-    config.read_string(templateDosboxConf)
+    template_dosbox_conf = get_dosbox_conf_global_template()
+    config.read_string(template_dosbox_conf)
 
     # Override included and global dosbox configs with custom settings
-    customDosboxConf = get_dosbox_conf_custom_template(path)
-    config.read_string(customDosboxConf)
+    custom_dosbox_conf = get_dosbox_conf_custom_template(path)
+    config.read_string(custom_dosbox_conf)
 
     # Delete the [autoexec] section. We handle it separately
     config.remove_section('autoexec')
