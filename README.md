@@ -12,6 +12,16 @@
 [![Issues][issues-shield]][issues-url]
 [![MIT License][license-shield]][license-url]
 
+### STYLE REFERENCES
+
+https://peps.python.org/pep-0008/
+
+DOCString https://numpydoc.readthedocs.io/en/latest/format.html#notes
+
+function naming: https://docs.microsoft.com/en-us/powershell/scripting/developer/cmdlet/approved-verbs-for-windows-powershell-commands?view=powershell-7.2
+
+https://docutils.sourceforge.io/docs/user/rst/quickref.html#inline-markup
+
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
