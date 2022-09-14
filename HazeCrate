@@ -1,11 +1,6 @@
 #!/usr/bin/python3
 """
 Launches DOS executable in DOSBox from Steam compatibility tool parameters.
-
-Returns
--------
-_type_
-    _description_
 """
 
 ### REFERENCES ###
@@ -32,7 +27,7 @@ SCRIPT_PATH = str(os.path.dirname(__file__))
 DEBUG_LOG_PATH = SCRIPT_PATH + '/debug/debug_' + STEAM_APP_ID + '.log'
 
 # GLOBAL VARIABLES
-AUTO_CONFIG_PATH = ''
+# AUTO_CONFIG_PATH = ''
 
 
 if os.path.exists(DEBUG_LOG_PATH):
@@ -51,7 +46,7 @@ def write_debug_line(line: str):
         with open(DEBUG_LOG_PATH, 'a', encoding='utf-8') as f:
             f.write(line + '\n')
 
-def write_new_dosbox_config_line(line: str):
+def write_new_dosbox_config_line(line: str, auto_conf_path: str):
     """
     Writes string as new line to DOSBox auto config file.
 
@@ -59,12 +54,14 @@ def write_new_dosbox_config_line(line: str):
     ----------
     line : str
         String to write.
+    auto_conf_path : str
+        Path to the new DOSBox config file.
     """
     try:
-        with open(AUTO_CONFIG_PATH, 'a', encoding='utf-8') as f:
+        with open(auto_conf_path, 'a', encoding='utf-8') as f:
             f.write(line + '\n')
-    except Exception as e:
-        write_debug_line("Can't save config: " + AUTO_CONFIG_PATH + "Exception: " + str(e))
+    except OSError as e:
+        write_debug_line("Can't save config: " + auto_conf_path + "Exception: " + str(e))
 
 def file_exists_ci(path: str) -> str:
     """
@@ -167,18 +164,19 @@ def update_autoexec_section(conf: list) -> list:
             auto_exec_conf.append(line)
 
     # The [autoexec] sections can be an absolute mess, let's try to clean it up.
-    for i in range(len(auto_exec_conf)):
-        line = auto_exec_conf[i]
+    for i, line in enumerate(auto_exec_conf):
         # Fix the paths for a Linux environment
-        auto_exec_conf[i] = auto_exec_conf[i].replace('\\','/')
+        line = line.replace('\\','/')
 
         # Try to fix the case senstitivity in mount lines...
-        if auto_exec_conf[i].lower().startswith('mount'):
-            auto_exec_conf[i] = update_mount(auto_exec_conf[i])
+        if line.lower().startswith('mount'):
+            line = update_mount(line)
 
         # Try to fix the case senstitivity in imgmount lines...
-        if auto_exec_conf[i].lower().startswith('imgmount'):
-            auto_exec_conf[i] = update_imgmount(auto_exec_conf[i])
+        if line.lower().startswith('imgmount'):
+            line = update_imgmount(line)
+
+        auto_exec_conf[i] = line
     return auto_exec_conf
 
 def update_mount(line: str) -> str:
@@ -223,9 +221,9 @@ def update_imgmount(line: str) -> str:
     `DOSBox IMGMOUNT Command https://www.dosbox.com/wiki/IMGMOUNT`_
     """
     args = shlex.split(line)
-    for i in range(len(args)):
-        if str(args[i]).replace('"', '').lower().endswith('.iso'):
-            args[i] = convert_mount_command_path_format(args[i])
+    for i, arg in enumerate(args):
+        if str(arg).replace('"', '').lower().endswith('.iso'):
+            args[i] = convert_mount_command_path_format(arg)
     line = ' '.join(args)
     return line
 
@@ -245,12 +243,12 @@ def convert_mount_command_path_format(path: str) -> str:
     """
     write_debug_line("Intial Path: " + path)
     path_dirs = (path.replace('"', '')).split('/')
-    dir = os.getcwd()
+    valid_path = os.getcwd()
     for d in path_dirs:
-        dir = dir + '/' + d
-        search_path = Path(dir)
-        dir = file_exists_ci(str(search_path.resolve()))
-    new_path = str(Path(dir).resolve())
+        valid_path = valid_path + '/' + d
+        search_path = Path(valid_path)
+        valid_path = file_exists_ci(str(search_path.resolve()))
+    new_path = str(Path(valid_path).resolve())
     new_path = new_path.replace(str(HOME), '~')
     new_path =  '"' + new_path + '"'
     write_debug_line("Updated Path: " + new_path)
@@ -272,7 +270,7 @@ def get_dosbox_conf_hash(path: str) -> str:
 
     Notes
     -------
-    This is used to create unique auto config files for each launch option for the game. Many games include multiple configs/EXEs.
+    Unique auto config files for each game launch option. Many games have multiple configs.
     """
     hash_string = str(hashlib.sha256(path.encode()).hexdigest())
     hash_string = hash_string[-8:]
@@ -317,15 +315,10 @@ def parse_args(args: list) -> argparse.Namespace:
     arg_parser.add_argument('-printconf', action='store_true')
     arg_parser.add_argument('-eraseconf', action='store_true')
     arg_parser.add_argument('-erasemapper')
-    try:
-        results = arg_parser.parse_args(args)
-    except Exception as e:
-        write_debug_line('Error parsing arguments ' + str(args))
-        write_debug_line('Exception: ' + str(e))
- 
+    results = arg_parser.parse_args(args)
     return results
 
-def new_dosbox_command(args: argparse.Namespace) -> str:
+def new_dosbox_command(args: argparse.Namespace, auto_conf_path: str) -> str:
     """
     Returns the new DOSBox command to run including new config files.
 
@@ -333,6 +326,8 @@ def new_dosbox_command(args: argparse.Namespace) -> str:
     ----------
     args : argparse.Namespace
         Namespace will all of the arguments received from Steam.
+    auto_conf_path : str
+        Path to the new DOSBox config file.
 
     Returns
     -------
@@ -341,7 +336,8 @@ def new_dosbox_command(args: argparse.Namespace) -> str:
     """
     command = []
     # flatpak run and set filesystem path
-    command.append('flatpak run --filesystem="' + SCRIPT_PATH + '" --filesystem="' + STEAM_INSTALL_PATH + '"')
+    flatpak_cmd = f'flatpak run --filesystem="{SCRIPT_PATH}" --filesystem="{STEAM_INSTALL_PATH}"'
+    command.append(flatpak_cmd)
     # DOSBox flatpak to use
     command.append(DOSBOX_PATH)
     # Executable if it was listed
@@ -351,7 +347,7 @@ def new_dosbox_command(args: argparse.Namespace) -> str:
         command.append(shlex.quote(exe_path))
     # New DOSBox config
     command.append("-conf")
-    command.append(shlex.quote(AUTO_CONFIG_PATH))
+    command.append(shlex.quote(auto_conf_path))
     # Make sure we exit DOSBox when the game exits
     command.append("-exit")
     # Create command string from array
@@ -440,12 +436,12 @@ def get_default_dosbox_conf_data(path: str) -> list:
     try:
         with open(path, 'r', encoding='utf-8') as file:
             lines = file.read().splitlines()
-    except Exception as e:
+    except OSError as e:
         write_debug_line("Couldn't open config. Exception: " + str(e))
 
     return lines
 
-def create_auto_dosbox_conf(path: str):
+def create_auto_dosbox_conf(path: str, auto_conf_path: str):
     """
     Creates new DOSBox configuration file for game based on existing configs.
 
@@ -453,10 +449,11 @@ def create_auto_dosbox_conf(path: str):
     ----------
     path : str
         Path to default DOSBox config file.
-
+    auto_conf_path : str
+        Path to the new DOSBox config file.
     Notes
     ----------
-    DOSBox config file order of precedence (higher overrides lower): 
+    DOSBox config file order of precedence (higher overrides lower):
     1. Custom (per-game custom config)
     2. Global Template (default included with HazeCrate)
     3. Default (included with game)
@@ -473,8 +470,12 @@ def create_auto_dosbox_conf(path: str):
     try:
         config.read(path)
     # Usually exceptions are [autoexec] errors since configParser doesn't like the format.
-    except Exception as e:
-        write_debug_line("Couldn't parse config. Exception: " + str(e))
+    except configparser.MissingSectionHeaderError as e:
+        write_debug_line('No section headers found. ' + path)
+        write_debug_line('Exception: ' + str(e))
+    except configparser.ParsingError as e:
+        write_debug_line('Error parsing dosbox config file: ' + path)
+        write_debug_line('Exception: ' + str(e))
 
     # Global config template will apply baseline settings.
     template_dosbox_conf = get_dosbox_conf_global_template()
@@ -489,19 +490,19 @@ def create_auto_dosbox_conf(path: str):
 
     # Save modified config
     for section in config.sections():
-        write_new_dosbox_config_line('[' + section + ']')
+        write_new_dosbox_config_line('[' + section + ']', auto_conf_path)
         for (key, val) in config.items(section):
-            write_new_dosbox_config_line(key + '=' + val)
+            write_new_dosbox_config_line(key + '=' + val, auto_conf_path)
 
     # Save [autoexec] section
     for line in autoexec:
-        write_new_dosbox_config_line(line)
+        write_new_dosbox_config_line(line, auto_conf_path)
 
 def main():
     """
     Runs everything.
     """
-    global AUTO_CONFIG_PATH
+    # global AUTO_CONFIG_PATH
     write_debug_line('APP ID: ' + STEAM_APP_ID)
     write_debug_line('INSTALL PATH: ' + STEAM_GAME_INSTALL_PATH)
     write_debug_line('HAZECRATE PATH: ' + SCRIPT_PATH)
@@ -509,10 +510,10 @@ def main():
 
     args = parse_args(sys.argv)
     dev_config_path = get_default_dosbox_conf_path(args.conf)
-    AUTO_CONFIG_PATH = create_dosbox_autoconf_path(args.conf)
-    write_debug_line("Autoconfig path: " + AUTO_CONFIG_PATH)
-    create_auto_dosbox_conf(dev_config_path)
-    cmd = new_dosbox_command(args)
+    auto_config_path = create_dosbox_autoconf_path(args.conf)
+    write_debug_line("Autoconfig path: " + auto_config_path)
+    create_auto_dosbox_conf(dev_config_path, auto_config_path)
+    cmd = new_dosbox_command(args, auto_config_path)
     write_debug_line('CMD: ' + cmd)
     os.system(cmd)
 
