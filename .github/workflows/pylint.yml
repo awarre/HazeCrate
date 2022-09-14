@@ -20,4 +20,7 @@ jobs:
         pip install pylint
     - name: Analysing the code with pylint
       run: |
-        pylint $(git ls-files 'HazeCrate') --good-names='HazeCrate','i','p','f','e','d'
+        pylint $(git ls-files 'HazeCrate')
+    - name: Python flake8 Lint
+      uses: py-actions/flake8@v2.2.0
+
