@@ -305,9 +305,9 @@ def parse_args(args: list) -> argparse.Namespace:
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument('compatpath', nargs='?', default='')
     arg_parser.add_argument('--dosbox', nargs='+', default='')
-    arg_parser.add_argument('-conf', help='DOSBox configuration file.', default='/dosbox.conf')
+    arg_parser.add_argument('-conf', help='DOSBox configuration file.', action='append')
     arg_parser.add_argument('-exit', action='store_true')
-    arg_parser.add_argument('-c', action='store_true')
+    arg_parser.add_argument('-c', nargs='?')
     arg_parser.add_argument('-fullscreen', action='store_true')
     arg_parser.add_argument('-lang')
     arg_parser.add_argument('-machine')
@@ -325,19 +325,21 @@ def parse_args(args: list) -> argparse.Namespace:
     arg_parser.add_argument('-eraseconf', action='store_true')
     arg_parser.add_argument('-erasemapper')
     results = arg_parser.parse_args(args)
+
+    if not results.conf:
+        results.conf = ['/dosbox.conf']
+
     return results
 
 
-def new_dosbox_command(args: argparse.Namespace, auto_conf_path: str) -> str:
+def new_dosbox_command(args: argparse.Namespace) -> str:
     """
     Returns the new DOSBox command to run including new config files.
 
     Parameters
     ----------
     args : argparse.Namespace
-        Namespace will all of the arguments received from Steam.
-    auto_conf_path : str
-        Path to the new DOSBox config file.
+        Arguments received from Steam.
 
     Returns
     -------
@@ -345,6 +347,7 @@ def new_dosbox_command(args: argparse.Namespace, auto_conf_path: str) -> str:
         Returns the new command to launch the game.
     """
     command = []
+    auto_conf_path = create_auto_dosbox_conf(args)
     # flatpak run and set filesystem path
     flatpak_cmd = f'flatpak run --filesystem="{SCRIPT_PATH}" --filesystem="{STEAM_INSTALL_PATH}"'
     command.append(flatpak_cmd)
@@ -455,18 +458,20 @@ def get_default_dosbox_conf_data(path: str) -> list:
     return lines
 
 
-def create_auto_dosbox_conf(path: str, auto_conf_path: str):
+def create_auto_dosbox_conf(args: argparse.Namespace):
     """
     Creates new DOSBox configuration file for game based on existing configs.
 
     Parameters
     ----------
-    path : str
-        Path to default DOSBox config file.
-    auto_conf_path : str
-        Path to the new DOSBox config file.
+    args : argparse.Namespace
+        Arguments received from Steam.
+    Returns
+    -------
+    str
+        Path to the DOSBox config file generated.
     Notes
-    ----------
+    -----
     DOSBox config file order of precedence (higher overrides lower):
     1. Custom (per-game custom config)
     2. Global Template (default included with HazeCrate)
@@ -477,26 +482,34 @@ def create_auto_dosbox_conf(path: str, auto_conf_path: str):
     https://github.com/dosbox-staging/dosbox-staging/wiki/Config-file-examples`_
 
     """
+    # default_config_path = get_default_dosbox_conf_path(args.conf)
+
+    # path = get_default_dosbox_conf_path(args.conf[0])
+    auto_conf_path = create_dosbox_autoconf_path(args.conf[0])
     config = configparser.ConfigParser()
-    config_data = get_default_dosbox_conf_data(path)
-    autoexec = update_autoexec_section(config_data)
-    # Parse the game's included dosbox config
-    try:
-        config.read(path)
-    # Usually exceptions are [autoexec] errors since configParser doesn't like the format.
-    except configparser.MissingSectionHeaderError as e:
-        write_debug_line('No section headers found. ' + path)
-        write_debug_line('Exception: ' + str(e))
-    except configparser.ParsingError as e:
-        write_debug_line('Error parsing dosbox config file: ' + path)
-        write_debug_line('Exception: ' + str(e))
+
+    for p in args.conf:
+        path = get_default_dosbox_conf_path(p)
+        config_data = get_default_dosbox_conf_data(path)
+        autoexec = update_autoexec_section(config_data)
+        # Parse the game's included dosbox config
+        try:
+            config.read(path)
+        # Usually exceptions are [autoexec] errors since configParser doesn't like the format.
+        except configparser.MissingSectionHeaderError as e:
+            write_debug_line('No section headers found. ' + path)
+            write_debug_line('Exception: ' + str(e))
+        except configparser.ParsingError as e:
+            write_debug_line('Error parsing dosbox config file: ' + path)
+            write_debug_line('Exception: ' + str(e))
 
     # Global config template will apply baseline settings.
     template_dosbox_conf = get_dosbox_conf_global_template()
     config.read_string(template_dosbox_conf)
 
     # Override included and global dosbox configs with custom settings
-    custom_dosbox_conf = get_dosbox_conf_custom_template(path)
+    custom_conf_path = get_new_dosbox_conf_dir(args.conf[0]) + '/custom.conf'
+    custom_dosbox_conf = get_dosbox_conf_custom_template(custom_conf_path)
     config.read_string(custom_dosbox_conf)
 
     # Delete the [autoexec] section. We handle it separately
@@ -511,24 +524,20 @@ def create_auto_dosbox_conf(path: str, auto_conf_path: str):
     # Save [autoexec] section
     for line in autoexec:
         write_new_dosbox_config_line(line, auto_conf_path)
+    return auto_conf_path
 
 
 def main():
     """
     Runs everything.
     """
-    # global AUTO_CONFIG_PATH
     write_debug_line('APP ID: ' + STEAM_APP_ID)
     write_debug_line('INSTALL PATH: ' + STEAM_GAME_INSTALL_PATH)
     write_debug_line('HAZECRATE PATH: ' + SCRIPT_PATH)
     write_debug_line('Args: ' + str(sys.argv))
-
     args = parse_args(sys.argv)
-    dev_config_path = get_default_dosbox_conf_path(args.conf)
-    auto_config_path = create_dosbox_autoconf_path(args.conf)
-    write_debug_line("Autoconfig path: " + auto_config_path)
-    create_auto_dosbox_conf(dev_config_path, auto_config_path)
-    cmd = new_dosbox_command(args, auto_config_path)
+    write_debug_line("Parsed args: " + str(args))
+    cmd = new_dosbox_command(args)
     write_debug_line('CMD: ' + cmd)
     os.system(cmd)
 
