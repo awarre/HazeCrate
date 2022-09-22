@@ -327,7 +327,7 @@ def parse_args(args: list) -> argparse.Namespace:
     results = arg_parser.parse_args(args)
 
     if not results.conf:
-        results.conf = ['/dosbox.conf']
+        results.conf = ['dosbox.conf']
 
     return results
 
@@ -426,6 +426,7 @@ def get_default_dosbox_conf_path(conf: str) -> str:
     if conf:
         write_debug_line('DOSBox config found: ' + conf)
         path = os.getcwd() + '/' + str(conf).replace('\\', '/')
+        write_debug_line(path)
         # Try to make relative path more absolute
         if STEAM_GAME_INSTALL_PATH not in path:
             path = STEAM_GAME_INSTALL_PATH + '/' + path
@@ -490,6 +491,8 @@ def create_auto_dosbox_conf(args: argparse.Namespace):
 
     for p in args.conf:
         path = get_default_dosbox_conf_path(p)
+        write_debug_line(p)
+        write_debug_line(path)
         config_data = get_default_dosbox_conf_data(path)
         autoexec = update_autoexec_section(config_data)
         # Parse the game's included dosbox config
