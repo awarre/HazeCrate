@@ -13,6 +13,9 @@ import shlex
 import argparse
 import hashlib
 from pathlib import Path
+import game_select_menu
+import parse_sierralauncher
+
 
 # CONFIGURATION
 DEBUG = True
@@ -79,13 +82,17 @@ def file_exists_ci(path: str) -> str:
     """
     # Look for path regardless of case
     if not os.path.exists(path):
+        write_debug_line('invalid path: ' + path)
         if '/' in path:
-            validate_dir = os.path.dirname(path)
+            parent_dir = os.path.dirname(path)
+            write_debug_line('parent dir path: ' + parent_dir)
         else:
-            validate_dir = './'
-        for p in os.listdir(validate_dir):
+            parent_dir = './'
+        for p in os.listdir(parent_dir):
+            write_debug_line(p)
             if str(p).lower() == str(os.path.basename(path)).lower():
-                return str(os.path.join(validate_dir, p))
+                write_debug_line('valid path: ' + path)
+                return str(os.path.join(parent_dir, p))
         # No file found?
         return ''
     return str(path)
@@ -327,7 +334,7 @@ def parse_args(args: list) -> argparse.Namespace:
     results = arg_parser.parse_args(args)
 
     if not results.conf:
-        results.conf = ['/dosbox.conf']
+        results.conf = ['dosbox.conf']
 
     return results
 
@@ -426,6 +433,7 @@ def get_default_dosbox_conf_path(conf: str) -> str:
     if conf:
         write_debug_line('DOSBox config found: ' + conf)
         path = os.getcwd() + '/' + str(conf).replace('\\', '/')
+        write_debug_line("Conf path: " + path)
         # Try to make relative path more absolute
         if STEAM_GAME_INSTALL_PATH not in path:
             path = STEAM_GAME_INSTALL_PATH + '/' + path
@@ -482,9 +490,6 @@ def create_auto_dosbox_conf(args: argparse.Namespace):
     https://github.com/dosbox-staging/dosbox-staging/wiki/Config-file-examples`_
 
     """
-    # default_config_path = get_default_dosbox_conf_path(args.conf)
-
-    # path = get_default_dosbox_conf_path(args.conf[0])
     auto_conf_path = create_dosbox_autoconf_path(args.conf[0])
     config = configparser.ConfigParser()
 
@@ -527,6 +532,64 @@ def create_auto_dosbox_conf(args: argparse.Namespace):
     return auto_conf_path
 
 
+def find_menu_conf(args: list) -> list:
+    new_args = args
+    if 'sierralauncher' in str(args).lower():
+        write_debug_line('sierra: ' + str(args))
+        for arg in args:
+            if arg.endswith('SierraLauncher.exe'):
+                write_debug_line(str(os.path.dirname(arg)))
+                menu_dir = os.path.dirname(arg)
+                menu_path = f"{menu_dir}/SierraLauncher.ini"
+                game_list = select_game_list(menu_path)
+                new_args = create_menu_conf_args(game_list, menu_dir)
+
+    if os.path.exists(os.path.basename(STEAM_GAME_INSTALL_PATH) + '/menu.ini'):
+        write_debug_line('menu.ini')
+
+    return new_args
+
+
+def select_game_list(path: str):
+    game_list = parse_sierralauncher.GameList(path)
+    menu = game_select_menu.GameMenu()
+    menu.create_game_menu(game_list.get_games_list())
+    menu.mainloop()
+    game = game_select_menu.GameMenuButton.game_selection
+    return game
+
+
+def create_menu_conf_args(game: list, menu_path: str) -> list:
+    write_debug_line('create menu?')
+    rel_path = game.get('path').replace('\\', '/')
+    write_debug_line('menu game list: ' + str(game))
+    write_debug_line('menu rel game path: ' + rel_path)
+    game_path = f"{menu_path}/{rel_path}/"
+    write_debug_line("menu game path: " + game_path)
+    valid_path = ''
+    write_debug_line("Searching for complete path...")
+    for d in game_path.split('/'):
+        write_debug_line("PATH: " + valid_path)
+        valid_path = valid_path + '/' + d
+        search_path = Path(valid_path)
+        valid_path = file_exists_ci(str(search_path.resolve()))
+
+    write_debug_line("menu game path validated: " + valid_path)
+    os.chdir(valid_path)
+    exe_path = f"{valid_path}/{game.get('exe')}"
+    write_debug_line('Menu EXE: ' + exe_path)
+    args = [
+        __file__,
+        '--dosbox',
+        exe_path
+    ]
+    write_debug_line(str(args))
+    write_debug_line('Menu cmd: ' + str(game.get('cmd')))
+    args.extend(game.get('cmd').split())
+    write_debug_line('Menu conf args: ' + str(args))
+    return args
+
+
 def main():
     """
     Runs everything.
@@ -535,7 +598,9 @@ def main():
     write_debug_line('INSTALL PATH: ' + STEAM_GAME_INSTALL_PATH)
     write_debug_line('HAZECRATE PATH: ' + SCRIPT_PATH)
     write_debug_line('Args: ' + str(sys.argv))
-    args = parse_args(sys.argv)
+    args = find_menu_conf(sys.argv)
+    args = parse_args(args)
+
     write_debug_line("Parsed args: " + str(args))
     cmd = new_dosbox_command(args)
     write_debug_line('CMD: ' + cmd)
