@@ -29,7 +29,7 @@ class GameMenu(tkinter.Tk):
 
 class GameMenuButton(tkinter.Button):
     "Button to select game."
-    game_selection = ''
+    game_selection = []
     active_foreground = '#0d2330'
     active_background = '#90a1b7'
     default_foreground = '#46bAFD'
@@ -37,7 +37,7 @@ class GameMenuButton(tkinter.Button):
 
     def __init__(self, master, **kw):
         tkinter.Button.__init__(self, master, **kw)
-        self['font'] = tkinter.font.Font(size=50)
+        self['font'] = tkinter.font.Font(size=5)
         self.default_background = '#454c5d'
         self['background'] = self.default_background
         self.config(fg='#46bAFD')

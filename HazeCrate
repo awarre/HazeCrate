@@ -89,7 +89,6 @@ def file_exists_ci(path: str) -> str:
         else:
             parent_dir = './'
         for p in os.listdir(parent_dir):
-            write_debug_line(p)
             if str(p).lower() == str(os.path.basename(path)).lower():
                 write_debug_line('valid path: ' + path)
                 return str(os.path.join(parent_dir, p))
@@ -255,17 +254,13 @@ def convert_mount_command_path_format(path: str) -> str:
     str
         Case-corrected absolute path.
     """
-    write_debug_line("Intial Path: " + path)
     path_dirs = (path.replace('"', '')).split('/')
     valid_path = os.getcwd()
     for d in path_dirs:
         valid_path = valid_path + '/' + d
         search_path = Path(valid_path)
         valid_path = file_exists_ci(str(search_path.resolve()))
-    new_path = str(Path(valid_path).resolve())
-    new_path = new_path.replace(str(HOME), '~')
-    new_path = '"' + new_path + '"'
-    write_debug_line("Updated Path: " + new_path)
+    new_path = f'"{str(Path(valid_path).resolve())}"'
     return new_path
 
 
@@ -309,6 +304,14 @@ def parse_args(args: list) -> argparse.Namespace:
     Notes
     `DOSBox Command Line Parameters https://www.dosbox.com/wiki/Usage`_
     """
+
+    # Check if game has dosbox params in batch file
+    if args[2].endswith('.bat'):
+        write_debug_line('Batch file: ' + args[2])
+        args = parse_batch(args)
+    else:
+        write_debug_line(args[2])
+
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument('compatpath', nargs='?', default='')
     arg_parser.add_argument('--dosbox', nargs='+', default='')
@@ -334,9 +337,26 @@ def parse_args(args: list) -> argparse.Namespace:
     results = arg_parser.parse_args(args)
 
     if not results.conf:
+        write_debug_line('No DOSBox config found, using default.')
         results.conf = ['dosbox.conf']
 
     return results
+
+
+def parse_batch(args: list) -> list:
+    "Checks batch file for dosbox parameters"
+    if os.path.exists(args[2]):
+        write_debug_line('Batch file found: ' + args[2])
+        with open(args[2], 'r', encoding='utf-8') as f:
+            data = f.read().splitlines()
+        for line in data:
+            if 'dosbox' in line.lower():
+                line = line.replace('\\', '/')
+                write_debug_line('Dosbox param found in batch file')
+                batch_args = shlex.split(line)
+                del args[2]
+                args.extend(batch_args)
+    return args
 
 
 def new_dosbox_command(args: argparse.Namespace) -> str:
@@ -457,11 +477,18 @@ def get_default_dosbox_conf_data(path: str) -> list:
     list
         DOSBox config file lines as list of strings.
     """
-    try:
-        with open(path, 'r', encoding='utf-8') as file:
-            lines = file.read().splitlines()
-    except OSError as e:
-        write_debug_line("Couldn't open config. Exception: " + str(e))
+    encodings = ['utf-8', 'windows-1250', 'windows-1252']
+    for encode in encodings:
+        try:
+            with open(path, 'r', encoding=encode) as file:
+                lines = file.read().splitlines()
+            write_debug_line("Encoding: " + encode)
+        except OSError as e:
+            write_debug_line("Couldn't open config. Exception: " + str(e))
+        except Exception as e:
+            write_debug_line("Couldn't open config. Exception: " + str(e))
+        else:
+            break
 
     return lines
 
@@ -499,14 +526,18 @@ def create_auto_dosbox_conf(args: argparse.Namespace):
         autoexec = update_autoexec_section(config_data)
         # Parse the game's included dosbox config
         try:
+            write_debug_line('Config Path: ' + path)
             config.read(path)
+            write_debug_line('Config read successfully!')
         # Usually exceptions are [autoexec] errors since configParser doesn't like the format.
         except configparser.MissingSectionHeaderError as e:
-            write_debug_line('No section headers found. ' + path)
+            write_debug_line('No section headers found: ' + path)
             write_debug_line('Exception: ' + str(e))
         except configparser.ParsingError as e:
             write_debug_line('Error parsing dosbox config file: ' + path)
             write_debug_line('Exception: ' + str(e))
+        except configparser.Error as e:
+            write_debug_line('ConfigParser Exception: ' + str(e))
 
     # Global config template will apply baseline settings.
     template_dosbox_conf = get_dosbox_conf_global_template()
@@ -533,60 +564,57 @@ def create_auto_dosbox_conf(args: argparse.Namespace):
 
 
 def find_menu_conf(args: list) -> list:
+    "Locates menu config file and returns selection args"
     new_args = args
     if 'sierralauncher' in str(args).lower():
-        write_debug_line('sierra: ' + str(args))
         for arg in args:
             if arg.endswith('SierraLauncher.exe'):
-                write_debug_line(str(os.path.dirname(arg)))
                 menu_dir = os.path.dirname(arg)
                 menu_path = f"{menu_dir}/SierraLauncher.ini"
+                write_debug_line("SierraLauncher INI: " + menu_path)
                 game_list = select_game_list(menu_path)
                 new_args = create_menu_conf_args(game_list, menu_dir)
-
     if os.path.exists(os.path.basename(STEAM_GAME_INSTALL_PATH) + '/menu.ini'):
         write_debug_line('menu.ini')
-
     return new_args
 
 
 def select_game_list(path: str):
+    "Launches menu UI to select game. Returns game selection."
     game_list = parse_sierralauncher.GameList(path)
-    menu = game_select_menu.GameMenu()
-    menu.create_game_menu(game_list.get_games_list())
-    menu.mainloop()
-    game = game_select_menu.GameMenuButton.game_selection
+    if len(game_list.games_list) > 1:
+        write_debug_line("Multiple games listed, creating menu.")
+        menu = game_select_menu.GameMenu()
+        menu.create_game_menu(game_list.games_list)
+        menu.mainloop()
+        game = game_select_menu.GameMenuButton.game_selection
+    else:
+        write_debug_line("Only one game found, returning as selection.")
+        game = game_list.games_list[0]
+
+    write_debug_line(f"Game selected: {game}")
     return game
 
 
 def create_menu_conf_args(game: list, menu_path: str) -> list:
-    write_debug_line('create menu?')
+    "Creates valid launch args from menu list."
     rel_path = game.get('path').replace('\\', '/')
-    write_debug_line('menu game list: ' + str(game))
-    write_debug_line('menu rel game path: ' + rel_path)
     game_path = f"{menu_path}/{rel_path}/"
-    write_debug_line("menu game path: " + game_path)
+    write_debug_line("Game Path: " + game_path)
     valid_path = ''
-    write_debug_line("Searching for complete path...")
     for d in game_path.split('/'):
         write_debug_line("PATH: " + valid_path)
         valid_path = valid_path + '/' + d
         search_path = Path(valid_path)
         valid_path = file_exists_ci(str(search_path.resolve()))
-
-    write_debug_line("menu game path validated: " + valid_path)
     os.chdir(valid_path)
     exe_path = f"{valid_path}/{game.get('exe')}"
-    write_debug_line('Menu EXE: ' + exe_path)
     args = [
         __file__,
         '--dosbox',
         exe_path
     ]
-    write_debug_line(str(args))
-    write_debug_line('Menu cmd: ' + str(game.get('cmd')))
     args.extend(game.get('cmd').split())
-    write_debug_line('Menu conf args: ' + str(args))
     return args
 
 
