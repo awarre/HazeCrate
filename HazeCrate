@@ -485,8 +485,6 @@ def get_default_dosbox_conf_data(path: str) -> list:
             write_debug_line("Encoding: " + encode)
         except OSError as e:
             write_debug_line("Couldn't open config. Exception: " + str(e))
-        except Exception as e:
-            write_debug_line("Couldn't open config. Exception: " + str(e))
         else:
             break
 
