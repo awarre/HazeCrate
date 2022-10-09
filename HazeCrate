@@ -21,6 +21,8 @@ import parse_sierralauncher
 DEBUG = True
 DOSBOX_PATH = 'io.github.dosbox-staging'
 
+# test
+
 # GLOBAL CONSTANTS
 HOME = os.path.expanduser("~")
 STEAM_APP_ID = str(os.environ.get("STEAM_COMPAT_APP_ID"))
