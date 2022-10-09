@@ -21,7 +21,6 @@ import parse_sierralauncher
 DEBUG = True
 DOSBOX_PATH = 'io.github.dosbox-staging'
 
-# test
 
 # GLOBAL CONSTANTS
 HOME = os.path.expanduser("~")
