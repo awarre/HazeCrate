@@ -1,8 +1,10 @@
+"Package setup file"
 from setuptools import setup
 
 
 def readme():
-    with open('README.md') as f:
+    "Load README.md"
+    with open('README.md', 'r', encoding='utf-8') as f:
         return f.read()
 
 
